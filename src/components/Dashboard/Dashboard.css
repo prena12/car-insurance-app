@@ -75,7 +75,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: auto;
 }
 
 /* Header */
@@ -177,31 +177,21 @@
 
 .claims-actions {
   display: flex;
-  gap: 12px;
-}
-
-.filter-btn,
-.export-btn,
-.new-claim-btn {
-  padding: 10px 16px;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  background: white;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.filter-btn:hover,
-.export-btn:hover {
-  background: #f8f9fa;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .new-claim-btn {
   background: #f97316;
   color: white;
   border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 13px;
+  min-width: 100px;
 }
 
 .new-claim-btn:hover {

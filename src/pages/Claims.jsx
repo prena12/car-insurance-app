@@ -1,31 +1,25 @@
-import React from 'react';
+import React, { useState } from 'react';
+import NewClaimForm from '../components/Dashboard/NewClaimForm';
+import ClaimsList from '../components/Dashboard/ClaimsList';
 
 export default function Claims() {
+  const [refreshClaims, setRefreshClaims] = useState(0);
+
   return (
     <div className="container section">
       <h1 className="section-title">Claims</h1>
-      <div className="card">
-        <p className="muted">Submit your claim with details and we'll reach out shortly.</p>
-        <div className="form-row">
-          <div className="form-field">
-            <label>Policy Number</label>
-            <input placeholder="AS-123456" />
-          </div>
-          <div className="form-field">
-            <label>Phone</label>
-            <input placeholder="0300-1234567" />
-          </div>
+      <p className="muted">Submit your claim below. Your claim will be saved to the database and will appear in claims management.</p>
+      <div className="claim-page-grid">
+        <div className="claim-form-card">
+          <NewClaimForm onClose={() => {}} onSuccess={() => setRefreshClaims((prev) => prev + 1)} />
         </div>
-        <div className="form-field">
-          <label>Incident Description</label>
-          <input placeholder="Describe what happened..." />
-        </div>
-        <div className="form-actions">
-          <button className="btn-primary">Submit Claim</button>
+        <div className="claim-list-card">
+          <h2>Your Claims</h2>
+          <ClaimsList refresh={refreshClaims} />
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 

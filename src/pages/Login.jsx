@@ -18,7 +18,45 @@ export default function UserLogin() {
 
     if (email && password) {
       try {
-        // Authenticate with Firebase Auth
+        // Try Backend API first (if available)
+        try {
+          const backendResponse = await fetch('http://localhost:5000/api/auth/login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, password }),
+          });
+
+          if (backendResponse.ok) {
+            const backendData = await backendResponse.json();
+            console.log("Backend login successful:", backendData);
+            
+            // Store token and user data
+            localStorage.setItem('access_token', backendData.access_token);
+            
+            // Format user data for context
+            const userData = {
+              id: backendData.user.id,
+              email: backendData.user.email,
+              first_name: backendData.user.first_name,
+              lastName: backendData.user.last_name,
+              firstName: backendData.user.first_name, // For compatibility
+              claim_number: backendData.user.claim_number,
+              claimNumber: backendData.user.claim_number // For compatibility
+            };
+            
+            setUser(userData);
+            localStorage.setItem('user', JSON.stringify(userData));
+            navigate("/user-dashboard");
+            return; // Success, exit function
+          }
+        } catch (backendError) {
+          console.log("Backend API not available, trying Firebase...", backendError);
+          // Continue to Firebase authentication
+        }
+
+        // Fallback to Firebase Auth
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const authUser = userCredential.user;
         
@@ -51,8 +89,26 @@ export default function UserLogin() {
           setError("User data not found. Please sign up first.");
         }
       } catch (err) {
-        setError("Error logging in: " + err.message);
         console.error("Login error:", err);
+        
+        // Better error messages for Firebase errors
+        let errorMessage = "Error logging in. Please try again.";
+        
+        if (err.code === 'auth/invalid-credential') {
+          errorMessage = "Invalid email or password. Please check your credentials and try again.";
+        } else if (err.code === 'auth/user-not-found') {
+          errorMessage = "No account found with this email. Please sign up first.";
+        } else if (err.code === 'auth/wrong-password') {
+          errorMessage = "Incorrect password. Please try again.";
+        } else if (err.code === 'auth/invalid-email') {
+          errorMessage = "Invalid email address. Please enter a valid email.";
+        } else if (err.code === 'auth/too-many-requests') {
+          errorMessage = "Too many failed login attempts. Please try again later.";
+        } else if (err.message) {
+          errorMessage = err.message;
+        }
+        
+        setError(errorMessage);
       }
     } else {
       setError("Please enter both email and password"); 

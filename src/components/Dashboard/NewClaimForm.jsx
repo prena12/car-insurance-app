@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
+import { useUser } from '../../contexts/UserContext';
 import './NewClaimForm.css';
 
-const NewClaimForm = ({ onClose }) => {
+const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
+  const { user } = useUser();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     vehicleDetails: {
@@ -67,6 +71,112 @@ const NewClaimForm = ({ onClose }) => {
         [field]: value
       }
     }));
+  };
+
+  const handleClaimFormChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      claimForm: {
+        ...prev.claimForm,
+        [field]: value
+      }
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitError('');
+    setIsSubmitting(true);
+
+    try {
+      // Get token from localStorage
+      const token = localStorage.getItem('access_token');
+      const submitEmail = formData.documents.email?.trim();
+
+      if (!token && !submitEmail) {
+        setSubmitError('Please login or provide an email to submit a claim.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Prepare data for backend API
+      const claimData = {
+        // Vehicle Details
+        policy_no: formData.vehicleDetails.policyNo || null,
+        vehicle_make: formData.vehicleDetails.vehicleMake || null,
+        policy_start_date: formData.vehicleDetails.policyStartDate || null,
+        claim_count: formData.vehicleDetails.claimCount ? parseInt(formData.vehicleDetails.claimCount) : null,
+        engine: formData.vehicleDetails.engine || null,
+        policy_end_date: formData.vehicleDetails.policyEndDate || null,
+        claim_amount: formData.vehicleDetails.claimAmount ? parseInt(formData.vehicleDetails.claimAmount) : null,
+        vehicle_color: formData.vehicleDetails.vehicleColor || null,
+        vehicle_start_date: formData.vehicleDetails.vehicleStartDate || null,
+        deductible_amount: formData.vehicleDetails.deductibleAmount ? parseInt(formData.vehicleDetails.deductibleAmount) : null,
+        registration_no: formData.vehicleDetails.registrationNo || null,
+        year_of_manufacture: formData.vehicleDetails.yearOfManufacture ? parseInt(formData.vehicleDetails.yearOfManufacture) : null,
+        vehicle_end_date: formData.vehicleDetails.vehicleEndDate || null,
+        
+        // Claim Form
+        claim_type: formData.claimForm.claimType || null,
+        branch: formData.claimForm.branch || null,
+        date_time: formData.claimForm.dateTime || null,
+        incident_place: formData.claimForm.incidentPlace || null,
+        current_location: formData.claimForm.currentLocation || null,
+        circumstances: formData.claimForm.circumstances || null,
+        missing_parts: formData.claimForm.missingParts || null,
+        workshop_type: formData.claimForm.workshopType || null,
+        vehicle_type: formData.claimForm.vehicleType || null,
+        date_field: formData.claimForm.dateField || null,
+        workshop_name: formData.claimForm.workshopName || null,
+        vehicle_availability: formData.claimForm.vehicleAvailability || null,
+        
+        // Documents
+        relation_with_insured: formData.documents.relationWithInsured || 'Self',
+        name: formData.documents.name || null,
+        contact: formData.documents.contact || null,
+        email: formData.documents.email || (user && user.email) || null,
+        remarks: formData.documents.remarks || null,
+        remarks2: formData.documents.remarks2 || null,
+        documents_datetime: formData.documents.dateTime || null
+      };
+
+      // Call backend API
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await fetch('http://localhost:5000/api/claims', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(claimData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to submit claim');
+      }
+
+      const result = await response.json();
+      console.log('Claim submitted successfully:', result);
+
+      const localClaims = JSON.parse(localStorage.getItem('localClaims') || '[]');
+      const updatedLocalClaims = Array.isArray(localClaims) ? [...localClaims, result] : [result];
+      localStorage.setItem('localClaims', JSON.stringify(updatedLocalClaims));
+      
+      // Show success message and close form
+      alert(`Claim submitted successfully! Claim Number: ${result.claim_number}`);
+      onClose();
+      onSuccess(result);
+      
+    } catch (error) {
+      console.error('Error submitting claim:', error);
+      setSubmitError(error.message || 'Failed to submit claim. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderStep = () => {
@@ -201,7 +311,10 @@ const NewClaimForm = ({ onClose }) => {
             <div className="form-grid">
               <div className="form-group">
                 <label>Claim Type</label>
-                <select>
+                <select
+                  value={formData.claimForm.claimType}
+                  onChange={(e) => handleClaimFormChange('claimType', e.target.value)}
+                >
                   <option value="">Select Claim Type</option>
                   <option value="accident">Accident</option>
                   <option value="theft">Theft</option>
@@ -209,7 +322,10 @@ const NewClaimForm = ({ onClose }) => {
               </div>
               <div className="form-group">
                 <label>Branch</label>
-                <select>
+                <select
+                  value={formData.claimForm.branch}
+                  onChange={(e) => handleClaimFormChange('branch', e.target.value)}
+                >
                   <option value="">Select Branch</option>
                   <option value="karachi">Karachi Branch</option>
                   <option value="lahore">Lahore Branch</option>
@@ -221,23 +337,44 @@ const NewClaimForm = ({ onClose }) => {
               </div>
               <div className="form-group">
                 <label>Date & Time</label>
-                <input type="datetime-local" />
+                <input 
+                  type="datetime-local"
+                  value={formData.claimForm.dateTime}
+                  onChange={(e) => handleClaimFormChange('dateTime', e.target.value)}
+                />
               </div>
               <div className="form-group">
                 <label>Incident Place</label>
-                <input type="text" placeholder="Enter incident location" />
+                <input 
+                  type="text" 
+                  placeholder="Enter incident location"
+                  value={formData.claimForm.incidentPlace}
+                  onChange={(e) => handleClaimFormChange('incidentPlace', e.target.value)}
+                />
               </div>
               <div className="form-group full-width">
                 <label>Current Location</label>
-                <input type="text" placeholder="Current location" />
+                <input 
+                  type="text" 
+                  placeholder="Current location"
+                  value={formData.claimForm.currentLocation}
+                  onChange={(e) => handleClaimFormChange('currentLocation', e.target.value)}
+                />
               </div>
               <div className="form-group full-width">
                 <label>Circumstances of Claim/Loss</label>
-                <textarea placeholder="Write your message..."></textarea>
+                <textarea 
+                  placeholder="Write your message..."
+                  value={formData.claimForm.circumstances}
+                  onChange={(e) => handleClaimFormChange('circumstances', e.target.value)}
+                ></textarea>
               </div>
               <div className="form-group">
                 <label>Missing Parts Details</label>
-                <select>
+                <select
+                  value={formData.claimForm.missingParts}
+                  onChange={(e) => handleClaimFormChange('missingParts', e.target.value)}
+                >
                   <option value="">Select Model</option>
                   <option value="front-bumper">Front Bumper</option>
                   <option value="rear-bumper">Rear Bumper</option>
@@ -252,7 +389,10 @@ const NewClaimForm = ({ onClose }) => {
               </div>
               <div className="form-group">
                 <label>Workshop Type</label>
-                <select>
+                <select
+                  value={formData.claimForm.workshopType}
+                  onChange={(e) => handleClaimFormChange('workshopType', e.target.value)}
+                >
                   <option value="">Select Workshop</option>
                   <option value="authorized">Authorized Workshop</option>
                   <option value="partner">Partner Workshop</option>
@@ -262,7 +402,10 @@ const NewClaimForm = ({ onClose }) => {
               </div>
               <div className="form-group">
                 <label>Vehicle Type</label>
-                <select>
+                <select
+                  value={formData.claimForm.vehicleType}
+                  onChange={(e) => handleClaimFormChange('vehicleType', e.target.value)}
+                >
                   <option value="">Select Vehicle</option>
                   <option value="toyota-corolla">Toyota Corolla</option>
                   <option value="honda-civic">Honda Civic</option>
@@ -281,15 +424,29 @@ const NewClaimForm = ({ onClose }) => {
               </div>
               <div className="form-group">
                 <label>Date Field</label>
-                <input type="date" />
+                <input 
+                  type="date"
+                  value={formData.claimForm.dateField}
+                  onChange={(e) => handleClaimFormChange('dateField', e.target.value)}
+                />
               </div>
               <div className="form-group">
                 <label>Workshop Name</label>
-                <input type="text" placeholder="Enter workshop name" />
+                <input 
+                  type="text" 
+                  placeholder="Enter workshop name"
+                  value={formData.claimForm.workshopName}
+                  onChange={(e) => handleClaimFormChange('workshopName', e.target.value)}
+                />
               </div>
               <div className="form-group">
                 <label>Vehicle Availability</label>
-                <input type="text" placeholder="Enter availability" />
+                <input 
+                  type="text" 
+                  placeholder="Enter availability"
+                  value={formData.claimForm.vehicleAvailability}
+                  onChange={(e) => handleClaimFormChange('vehicleAvailability', e.target.value)}
+                />
               </div>
             </div>
           </div>
@@ -313,27 +470,55 @@ const NewClaimForm = ({ onClose }) => {
               </div>
               <div className="form-group">
                 <label>Name</label>
-                <input type="text" placeholder="Full name" />
+                <input 
+                  type="text" 
+                  placeholder="Full name"
+                  value={formData.documents.name}
+                  onChange={(e) => handleDocumentChange('name', e.target.value)}
+                />
               </div>
               <div className="form-group">
                 <label>Contact</label>
-                <input type="text" placeholder="Phone number" />
+                <input 
+                  type="text" 
+                  placeholder="Phone number"
+                  value={formData.documents.contact}
+                  onChange={(e) => handleDocumentChange('contact', e.target.value)}
+                />
               </div>
               <div className="form-group">
                 <label>Email</label>
-                <input type="email" placeholder="Email address" />
+                <input 
+                  type="email" 
+                  placeholder="Email address"
+                  value={formData.documents.email}
+                  onChange={(e) => handleDocumentChange('email', e.target.value)}
+                />
               </div>
               <div className="form-group full-width">
                 <label>Remarks</label>
-                <input type="text" placeholder="n/a" />
+                <input 
+                  type="text" 
+                  placeholder="n/a"
+                  value={formData.documents.remarks}
+                  onChange={(e) => handleDocumentChange('remarks', e.target.value)}
+                />
               </div>
               <div className="form-group full-width">
                 <label>Remarks 2 / Additional Info</label>
-                <textarea placeholder="n/a"></textarea>
+                <textarea 
+                  placeholder="n/a"
+                  value={formData.documents.remarks2}
+                  onChange={(e) => handleDocumentChange('remarks2', e.target.value)}
+                ></textarea>
               </div>
               <div className="form-group">
                 <label>Date/Time</label>
-                <input type="datetime-local" />
+                <input 
+                  type="datetime-local"
+                  value={formData.documents.dateTime}
+                  onChange={(e) => handleDocumentChange('dateTime', e.target.value)}
+                />
               </div>
             </div>
             <div className="document-uploads">
@@ -384,22 +569,48 @@ const NewClaimForm = ({ onClose }) => {
           </div>
         </div>
 
-        <form onSubmit={(e) => e.preventDefault()}>
+        <form onSubmit={handleSubmit}>
           {renderStep()}
+          
+          {submitError && (
+            <div style={{ 
+              color: 'red', 
+              padding: '10px', 
+              margin: '10px 0', 
+              background: '#ffe6e6', 
+              borderRadius: '5px',
+              textAlign: 'center'
+            }}>
+              {submitError}
+            </div>
+          )}
           
           <div className="form-actions">
             {step > 1 && (
-              <button type="button" className="back-btn" onClick={() => setStep(step - 1)}>
+              <button 
+                type="button" 
+                className="back-btn" 
+                onClick={() => setStep(step - 1)}
+                disabled={isSubmitting}
+              >
                 Back
               </button>
             )}
             {step < 3 ? (
-              <button type="button" className="next-btn" onClick={() => setStep(step + 1)}>
+              <button 
+                type="button" 
+                className="next-btn" 
+                onClick={() => setStep(step + 1)}
+              >
                 Next
               </button>
             ) : (
-              <button type="submit" className="submit-btn">
-                Submit
+              <button 
+                type="submit" 
+                className="submit-btn"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Submitting...' : 'Submit'}
               </button>
             )}
           </div>

@@ -301,3 +301,102 @@
 .claims-section {
   animation: slideInRight 1.4s ease-out;
 }
+
+/* Table Styles */
+.admin-claims-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 8px;
+  background: white;
+  margin-top: 10px;
+}
+
+.admin-claims-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.admin-claims-table th {
+  background-color: #f8f9fa;
+  padding: 12px 16px;
+  color: #666;
+  font-weight: 600;
+  border-bottom: 2px solid #eaeaea;
+}
+
+.admin-claims-table td {
+  padding: 16px;
+  border-bottom: 1px solid #eaeaea;
+  vertical-align: middle;
+  color: #333;
+}
+
+.admin-claims-table tr:hover {
+  background-color: #fbfbfb;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.status-badge.pending {
+  background-color: #fff3e0;
+  color: #f97316;
+}
+
+.status-badge.approved {
+  background-color: #e6f4ea;
+  color: #34a853;
+}
+
+.status-badge.rejected {
+  background-color: #fce8e8;
+  color: #ea4335;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.approve-btn, .reject-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.approve-btn {
+  background-color: #e6f4ea;
+  color: #34a853;
+}
+
+.approve-btn:hover:not(:disabled) {
+  background-color: #34a853;
+  color: white;
+}
+
+.reject-btn {
+  background-color: #fce8e8;
+  color: #ea4335;
+}
+
+.reject-btn:hover:not(:disabled) {
+  background-color: #ea4335;
+  color: white;
+}
+
+.approve-btn:disabled, .reject-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(100%);
+}
