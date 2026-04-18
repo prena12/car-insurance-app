@@ -10,75 +10,53 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
   const [formData, setFormData] = useState({
     vehicleDetails: {
       policyNo: '',
-      vehicleMake: '',
       policyStartDate: '',
-      claimCount: '',
-      engine: '',
       policyEndDate: '',
-      claimAmount: '',
-      vehicleColor: '',
-      vehicleStartDate: '',
-      deductibleAmount: '',
+      relationWithInsured: '',
       registrationNo: '',
+      vehicleMake: '',
+      vehicleModel: '',
       yearOfManufacture: '',
-      vehicleEndDate: ''
+      engineNo: '',
+      vehicleType: ''
     },
-    claimForm: {
+    claimDetails: {
       claimType: '',
-      branch: '',
-      dateTime: '',
-      incidentPlace: '',
-      currentLocation: '',
-      circumstances: '',
-      missingParts: '',
-      workshopType: '',
-      vehicleType: '',
-      dateField: '',
-      workshopName: '',
-      vehicleAvailability: ''
+      incidentDateTime: '',
+      incidentLocation: '',
+      currentVehicleLocation: '',
+      circumstances: ''
     },
-    documents: {
-      relationWithInsured: 'Self',
-      name: '',
-      contact: '',
-      email: '',
-      remarks: '',
-      remarks2: '',
-      dateTime: '',
+    documentsAndContact: {
+      fullName: user ? `${user.first_name} ${user.last_name || ''}`.trim() : '',
+      emailAddress: user?.email || '',
       uploads: {
-        registration: null,
+        registrationBook: null,
         drivingLicense: null,
-        nic: null
+        cnicCopy: null
       }
     }
   });
 
-  const handleInputChange = (field, value) => {
+  const handleInputChange = (section, field, value) => {
     setFormData(prev => ({
       ...prev,
-      vehicleDetails: {
-        ...prev.vehicleDetails,
+      [section]: {
+        ...prev[section],
         [field]: value
       }
     }));
   };
 
-  const handleDocumentChange = (field, value) => {
+  const handleFileUpload = (field, file) => {
     setFormData(prev => ({
       ...prev,
-      documents: {
-        ...prev.documents,
-        [field]: value
-      }
-    }));
-  };
-
-  const handleClaimFormChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      claimForm: {
-        ...prev.claimForm,
-        [field]: value
+      documentsAndContact: {
+        ...prev.documentsAndContact,
+        uploads: {
+          ...prev.documentsAndContact.uploads,
+          [field]: file
+        }
       }
     }));
   };
@@ -89,9 +67,8 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
     setIsSubmitting(true);
 
     try {
-      // Get token from localStorage
       const token = localStorage.getItem('access_token');
-      const submitEmail = formData.documents.email?.trim();
+      const submitEmail = formData.documentsAndContact.emailAddress?.trim();
 
       if (!token && !submitEmail) {
         setSubmitError('Please login or provide an email to submit a claim.');
@@ -99,54 +76,33 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
         return;
       }
 
-      // Prepare data for backend API
+      // Preparation for backend API (mapping new fields to existing schema)
       const claimData = {
         // Vehicle Details
         policy_no: formData.vehicleDetails.policyNo || null,
-        vehicle_make: formData.vehicleDetails.vehicleMake || null,
         policy_start_date: formData.vehicleDetails.policyStartDate || null,
-        claim_count: formData.vehicleDetails.claimCount ? parseInt(formData.vehicleDetails.claimCount) : null,
-        engine: formData.vehicleDetails.engine || null,
         policy_end_date: formData.vehicleDetails.policyEndDate || null,
-        claim_amount: formData.vehicleDetails.claimAmount ? parseInt(formData.vehicleDetails.claimAmount) : null,
-        vehicle_color: formData.vehicleDetails.vehicleColor || null,
-        vehicle_start_date: formData.vehicleDetails.vehicleStartDate || null,
-        deductible_amount: formData.vehicleDetails.deductibleAmount ? parseInt(formData.vehicleDetails.deductibleAmount) : null,
+        relation_with_insured: formData.vehicleDetails.relationWithInsured || 'Self',
         registration_no: formData.vehicleDetails.registrationNo || null,
+        vehicle_make: formData.vehicleDetails.vehicleMake || null,
+        vehicle_model: formData.vehicleDetails.vehicleModel || null,
         year_of_manufacture: formData.vehicleDetails.yearOfManufacture ? parseInt(formData.vehicleDetails.yearOfManufacture) : null,
-        vehicle_end_date: formData.vehicleDetails.vehicleEndDate || null,
+        engine: formData.vehicleDetails.engineNo || null,
+        vehicle_type: formData.vehicleDetails.vehicleType || null,
         
-        // Claim Form
-        claim_type: formData.claimForm.claimType || null,
-        branch: formData.claimForm.branch || null,
-        date_time: formData.claimForm.dateTime || null,
-        incident_place: formData.claimForm.incidentPlace || null,
-        current_location: formData.claimForm.currentLocation || null,
-        circumstances: formData.claimForm.circumstances || null,
-        missing_parts: formData.claimForm.missingParts || null,
-        workshop_type: formData.claimForm.workshopType || null,
-        vehicle_type: formData.claimForm.vehicleType || null,
-        date_field: formData.claimForm.dateField || null,
-        workshop_name: formData.claimForm.workshopName || null,
-        vehicle_availability: formData.claimForm.vehicleAvailability || null,
+        // Claim Details
+        claim_type: formData.claimDetails.claimType || null,
+        date_time: formData.claimDetails.incidentDateTime || null,
+        incident_place: formData.claimDetails.incidentLocation || null,
+        current_location: formData.claimDetails.currentVehicleLocation || null,
+        circumstances: formData.claimDetails.circumstances || null,
         
-        // Documents
-        relation_with_insured: formData.documents.relationWithInsured || 'Self',
-        name: formData.documents.name || null,
-        contact: formData.documents.contact || null,
-        email: formData.documents.email || (user && user.email) || null,
-        remarks: formData.documents.remarks || null,
-        remarks2: formData.documents.remarks2 || null,
-        documents_datetime: formData.documents.dateTime || null
+        // Documents & Contact
+        email: formData.documentsAndContact.emailAddress || (user && user.email) || null
       };
 
-      // Call backend API
-      const headers = {
-        'Content-Type': 'application/json'
-      };
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
 
       const response = await fetch('http://localhost:5000/api/claims', {
         method: 'POST',
@@ -160,20 +116,13 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
       }
 
       const result = await response.json();
-      console.log('Claim submitted successfully:', result);
-
-      const localClaims = JSON.parse(localStorage.getItem('localClaims') || '[]');
-      const updatedLocalClaims = Array.isArray(localClaims) ? [...localClaims, result] : [result];
-      localStorage.setItem('localClaims', JSON.stringify(updatedLocalClaims));
-      
-      // Show success message and close form
       alert(`Claim submitted successfully! Claim Number: ${result.claim_number}`);
       onClose();
       onSuccess(result);
       
     } catch (error) {
       console.error('Error submitting claim:', error);
-      setSubmitError(error.message || 'Failed to submit claim. Please try again.');
+      setSubmitError(error.message || 'Failed to submit claim.');
     } finally {
       setIsSubmitting(false);
     }
@@ -185,268 +134,200 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
         return (
           <div className="vehicle-details">
             <h2>Vehicle Details</h2>
+            <p className="step-subtext">Enter your policy and vehicle information</p>
+            
             <div className="form-grid">
+              <div className="section-divider">POLICY INFORMATION</div>
+              
               <div className="form-group">
-                <label>Policy No</label>
+                <label>POLICY NUMBER <span>*</span></label>
                 <input 
                   type="text" 
-                  placeholder="e.g. POL/XX/XXXX"
+                  placeholder="e.g. POL/2024/XXXX"
                   value={formData.vehicleDetails.policyNo}
-                  onChange={(e) => handleInputChange('policyNo', e.target.value)}
+                  onChange={(e) => handleInputChange('vehicleDetails', 'policyNo', e.target.value)}
+                  required
                 />
               </div>
               <div className="form-group">
-                <label>Vehicle Make</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. Suzuki"
-                  value={formData.vehicleDetails.vehicleMake}
-                  onChange={(e) => handleInputChange('vehicleMake', e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label>Policy Start Date</label>
+                <label>POLICY START DATE <span>*</span></label>
                 <input 
                   type="date"
                   value={formData.vehicleDetails.policyStartDate}
-                  onChange={(e) => handleInputChange('policyStartDate', e.target.value)}
+                  onChange={(e) => handleInputChange('vehicleDetails', 'policyStartDate', e.target.value)}
+                  required
                 />
               </div>
               <div className="form-group">
-                <label>Claim Count</label>
-                <input 
-                  type="number"
-                  placeholder="e.g. 2"
-                  value={formData.vehicleDetails.claimCount}
-                  onChange={(e) => handleInputChange('claimCount', e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label>Engine</label>
-                <input 
-                  type="text"
-                  placeholder="e.g. XXX/XX/XXXXXXX"
-                  value={formData.vehicleDetails.engine}
-                  onChange={(e) => handleInputChange('engine', e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label>Policy End Date</label>
+                <label>POLICY END DATE <span>*</span></label>
                 <input 
                   type="date"
                   value={formData.vehicleDetails.policyEndDate}
-                  onChange={(e) => handleInputChange('policyEndDate', e.target.value)}
+                  onChange={(e) => handleInputChange('vehicleDetails', 'policyEndDate', e.target.value)}
+                  required
                 />
               </div>
               <div className="form-group">
-                <label>Claim Amount</label>
-                <input 
-                  type="number"
-                  placeholder="e.g. 15000"
-                  value={formData.vehicleDetails.claimAmount}
-                  onChange={(e) => handleInputChange('claimAmount', e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label>Vehicle Color</label>
-                <input 
-                  type="text"
-                  placeholder="e.g. White"
-                  value={formData.vehicleDetails.vehicleColor}
-                  onChange={(e) => handleInputChange('vehicleColor', e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label>Vehicle Start Date</label>
-                <input 
-                  type="date"
-                  value={formData.vehicleDetails.vehicleStartDate}
-                  onChange={(e) => handleInputChange('vehicleStartDate', e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label>Deductible Amount</label>
-                <input 
-                  type="number"
-                  placeholder="e.g. 5000"
-                  value={formData.vehicleDetails.deductibleAmount}
-                  onChange={(e) => handleInputChange('deductibleAmount', e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label>Registration No</label>
-                <input 
-                  type="text"
-                  placeholder="e.g. ABC-123"
-                  value={formData.vehicleDetails.registrationNo}
-                  onChange={(e) => handleInputChange('registrationNo', e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label>Year of Manufacture</label>
-                <input 
-                  type="number"
-                  placeholder="e.g. 2015"
-                  value={formData.vehicleDetails.yearOfManufacture}
-                  onChange={(e) => handleInputChange('yearOfManufacture', e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label>Vehicle End Date</label>
-                <input 
-                  type="date"
-                  value={formData.vehicleDetails.vehicleEndDate}
-                  onChange={(e) => handleInputChange('vehicleEndDate', e.target.value)}
-                />
+                <label>RELATION WITH INSURED <span>*</span></label>
+                <select
+                  value={formData.vehicleDetails.relationWithInsured}
+                  onChange={(e) => handleInputChange('vehicleDetails', 'relationWithInsured', e.target.value)}
+                  required
+                >
+                  <option value="">Select relation</option>
+                  <option value="Self">Self</option>
+                  <option value="Spouse">Spouse</option>
+                  <option value="Child">Child</option>
+                  <option value="Driver">Driver</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
 
+              <div className="section-divider">VEHICLE INFORMATION</div>
+
+              <div className="form-group">
+                <label>REGISTRATION NUMBER <span>*</span></label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. ABC-123"
+                  value={formData.vehicleDetails.registrationNo}
+                  onChange={(e) => handleInputChange('vehicleDetails', 'registrationNo', e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>VEHICLE MAKE <span>*</span></label>
+                <select
+                  value={formData.vehicleDetails.vehicleMake}
+                  onChange={(e) => handleInputChange('vehicleDetails', 'vehicleMake', e.target.value)}
+                  required
+                >
+                  <option value="">Select make</option>
+                  <option value="Suzuki">Suzuki</option>
+                  <option value="Toyota">Toyota</option>
+                  <option value="Honda">Honda</option>
+                  <option value="Kia">Kia</option>
+                  <option value="Hyundai">Hyundai</option>
+                  <option value="MG">MG</option>
+                  <option value="Changan">Changan</option>
+                  <option value="Daihatsu">Daihatsu</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>VEHICLE MODEL <span>*</span></label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Corolla, Cultus..."
+                  value={formData.vehicleDetails.vehicleModel}
+                  onChange={(e) => handleInputChange('vehicleDetails', 'vehicleModel', e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>YEAR OF MANUFACTURE <span>*</span></label>
+                <select
+                  value={formData.vehicleDetails.yearOfManufacture}
+                  onChange={(e) => handleInputChange('vehicleDetails', 'yearOfManufacture', e.target.value)}
+                  required
+                >
+                  <option value="">Select year</option>
+                  {Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>ENGINE NUMBER <span>*</span></label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. XXX/XX/XXXXXXX"
+                  value={formData.vehicleDetails.engineNo}
+                  onChange={(e) => handleInputChange('vehicleDetails', 'engineNo', e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>VEHICLE TYPE</label>
+                <select
+                  value={formData.vehicleDetails.vehicleType}
+                  onChange={(e) => handleInputChange('vehicleDetails', 'vehicleType', e.target.value)}
+                >
+                  <option value="">Select model</option>
+                  <option value="Toyota Corolla">Toyota Corolla</option>
+                  <option value="Honda Civic">Honda Civic</option>
+                  <option value="Suzuki Alto">Suzuki Alto</option>
+                  <option value="Suzuki Cultus">Suzuki Cultus</option>
+                  <option value="Honda City">Honda City</option>
+                  <option value="Toyota Yaris">Toyota Yaris</option>
+                  <option value="Kia Sportage">Kia Sportage</option>
+                  <option value="Hyundai Tucson">Hyundai Tucson</option>
+                  <option value="MG HS">MG HS</option>
+                  <option value="Daihatsu Mira">Daihatsu Mira</option>
+                  <option value="Nissan Dayz">Nissan Dayz</option>
+                  <option value="Toyota Vitz">Toyota Vitz</option>
+                  <option value="Honda BR-V">Honda BR-V</option>
+                </select>
+              </div>
             </div>
           </div>
         );
-      
       case 2:
         return (
           <div className="claim-form">
-            <h2>Claim Form</h2>
+            <h2>Claim Details</h2>
+            <p className="step-subtext">Tell us about the incident</p>
+            
             <div className="form-grid">
               <div className="form-group">
-                <label>Claim Type</label>
+                <label>CLAIM TYPE <span>*</span></label>
                 <select
-                  value={formData.claimForm.claimType}
-                  onChange={(e) => handleClaimFormChange('claimType', e.target.value)}
+                  value={formData.claimDetails.claimType}
+                  onChange={(e) => handleInputChange('claimDetails', 'claimType', e.target.value)}
+                  required
                 >
-                  <option value="">Select Claim Type</option>
-                  <option value="accident">Accident</option>
-                  <option value="theft">Theft</option>
+                  <option value="">Select type</option>
+                  <option value="Collison/Accident">Collison/Accident</option>
+                  <option value="Scratch and Dent">Scratch and Dent</option>
+                  <option value="Flood Damage">Flood Damage</option>
+                  <option value="Fire Damage">Fire Damage</option>
                 </select>
               </div>
               <div className="form-group">
-                <label>Branch</label>
-                <select
-                  value={formData.claimForm.branch}
-                  onChange={(e) => handleClaimFormChange('branch', e.target.value)}
-                >
-                  <option value="">Select Branch</option>
-                  <option value="karachi">Karachi Branch</option>
-                  <option value="lahore">Lahore Branch</option>
-                  <option value="islamabad">Islamabad Branch</option>
-                  <option value="hyderabad">Hyderabad Branch</option>
-                  <option value="multan">Multan Branch</option>
-                  <option value="peshawar">Peshawar Branch</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Date & Time</label>
+                <label>INCIDENT DATE & TIME <span>*</span></label>
                 <input 
                   type="datetime-local"
-                  value={formData.claimForm.dateTime}
-                  onChange={(e) => handleClaimFormChange('dateTime', e.target.value)}
+                  value={formData.claimDetails.incidentDateTime}
+                  onChange={(e) => handleInputChange('claimDetails', 'incidentDateTime', e.target.value)}
+                  required
                 />
               </div>
               <div className="form-group">
-                <label>Incident Place</label>
+                <label>INCIDENT LOCATION <span>*</span></label>
                 <input 
                   type="text" 
-                  placeholder="Enter incident location"
-                  value={formData.claimForm.incidentPlace}
-                  onChange={(e) => handleClaimFormChange('incidentPlace', e.target.value)}
+                  placeholder="e.g. M-9 Motorway, Karachi"
+                  value={formData.claimDetails.incidentLocation}
+                  onChange={(e) => handleInputChange('claimDetails', 'incidentLocation', e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>CURRENT VEHICLE LOCATION</label>
+                <input 
+                  type="text" 
+                  placeholder="Where is vehicle now?"
+                  value={formData.claimDetails.currentVehicleLocation}
+                  onChange={(e) => handleInputChange('claimDetails', 'currentVehicleLocation', e.target.value)}
                 />
               </div>
               <div className="form-group full-width">
-                <label>Current Location</label>
-                <input 
-                  type="text" 
-                  placeholder="Current location"
-                  value={formData.claimForm.currentLocation}
-                  onChange={(e) => handleClaimFormChange('currentLocation', e.target.value)}
-                />
-              </div>
-              <div className="form-group full-width">
-                <label>Circumstances of Claim/Loss</label>
+                <label>CIRCUMSTANCES OF CLAIM / LOSS <span>*</span></label>
                 <textarea 
-                  placeholder="Write your message..."
-                  value={formData.claimForm.circumstances}
-                  onChange={(e) => handleClaimFormChange('circumstances', e.target.value)}
+                  placeholder="Describe what happened in detail — how the damage occurred, conditions at the time, etc."
+                  value={formData.claimDetails.circumstances}
+                  onChange={(e) => handleInputChange('claimDetails', 'circumstances', e.target.value)}
+                  required
                 ></textarea>
-              </div>
-              <div className="form-group">
-                <label>Missing Parts Details</label>
-                <select
-                  value={formData.claimForm.missingParts}
-                  onChange={(e) => handleClaimFormChange('missingParts', e.target.value)}
-                >
-                  <option value="">Select Model</option>
-                  <option value="front-bumper">Front Bumper</option>
-                  <option value="rear-bumper">Rear Bumper</option>
-                  <option value="headlights">Headlights</option>
-                  <option value="taillights">Taillights</option>
-                  <option value="side-mirror">Side Mirror</option>
-                  <option value="door-panel">Door Panel</option>
-                  <option value="windshield">Windshield</option>
-                  <option value="hood-bonnet">Hood/Bonnet</option>
-                  <option value="trunk">Trunk</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Workshop Type</label>
-                <select
-                  value={formData.claimForm.workshopType}
-                  onChange={(e) => handleClaimFormChange('workshopType', e.target.value)}
-                >
-                  <option value="">Select Workshop</option>
-                  <option value="authorized">Authorized Workshop</option>
-                  <option value="partner">Partner Workshop</option>
-                  <option value="local">Local Workshop</option>
-                  <option value="in-house">In-House Workshop</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Vehicle Type</label>
-                <select
-                  value={formData.claimForm.vehicleType}
-                  onChange={(e) => handleClaimFormChange('vehicleType', e.target.value)}
-                >
-                  <option value="">Select Vehicle</option>
-                  <option value="toyota-corolla">Toyota Corolla</option>
-                  <option value="honda-civic">Honda Civic</option>
-                  <option value="suzuki-alto">Suzuki Alto</option>
-                  <option value="suzuki-cultus">Suzuki Cultus</option>
-                  <option value="honda-city">Honda City</option>
-                  <option value="toyota-yaris">Toyota Yaris</option>
-                  <option value="kia-sportage">Kia Sportage</option>
-                  <option value="hyundai-tucson">Hyundai Tucson</option>
-                  <option value="mg-hs">MG HS</option>
-                  <option value="daihatsu-mira">Daihatsu Mira</option>
-                  <option value="nissan-dayz">Nissan Dayz</option>
-                  <option value="toyota-vitz">Toyota Vitz</option>
-                  <option value="honda-br-v">Honda BR-V</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Date Field</label>
-                <input 
-                  type="date"
-                  value={formData.claimForm.dateField}
-                  onChange={(e) => handleClaimFormChange('dateField', e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label>Workshop Name</label>
-                <input 
-                  type="text" 
-                  placeholder="Enter workshop name"
-                  value={formData.claimForm.workshopName}
-                  onChange={(e) => handleClaimFormChange('workshopName', e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label>Vehicle Availability</label>
-                <input 
-                  type="text" 
-                  placeholder="Enter availability"
-                  value={formData.claimForm.vehicleAvailability}
-                  onChange={(e) => handleClaimFormChange('vehicleAvailability', e.target.value)}
-                />
               </div>
             </div>
           </div>
@@ -455,86 +336,52 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
       case 3:
         return (
           <div className="documents">
-            <h2>Required Documents & Customer Details</h2>
+            <h2>Documents & Contact</h2>
+            <p className="step-subtext">Upload required documents and verify your contact info</p>
+            
             <div className="form-grid">
+              <div className="section-divider">CONTACT INFORMATION</div>
+              
               <div className="form-group">
-                <label>Relation with Insured</label>
-                <select
-                  value={formData.documents.relationWithInsured}
-                  onChange={(e) => handleDocumentChange('relationWithInsured', e.target.value)}
-                >
-        
-                  <option value="Self">Self</option>
-                  <option value="Other Family Member">Other Family Member</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Name</label>
+                <label>FULL NAME <span>*</span></label>
                 <input 
                   type="text" 
-                  placeholder="Full name"
-                  value={formData.documents.name}
-                  onChange={(e) => handleDocumentChange('name', e.target.value)}
+                  placeholder="As on CNIC"
+                  value={formData.documentsAndContact.fullName}
+                  onChange={(e) => handleInputChange('documentsAndContact', 'fullName', e.target.value)}
+                  required
                 />
-              </div>
-              <div className="form-group">
-                <label>Contact</label>
-                <input 
-                  type="text" 
-                  placeholder="Phone number"
-                  value={formData.documents.contact}
-                  onChange={(e) => handleDocumentChange('contact', e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label>Email</label>
-                <input 
-                  type="email" 
-                  placeholder="Email address"
-                  value={formData.documents.email}
-                  onChange={(e) => handleDocumentChange('email', e.target.value)}
-                />
-              </div>
-              <div className="form-group full-width">
-                <label>Remarks</label>
-                <input 
-                  type="text" 
-                  placeholder="n/a"
-                  value={formData.documents.remarks}
-                  onChange={(e) => handleDocumentChange('remarks', e.target.value)}
-                />
-              </div>
-              <div className="form-group full-width">
-                <label>Remarks 2 / Additional Info</label>
-                <textarea 
-                  placeholder="n/a"
-                  value={formData.documents.remarks2}
-                  onChange={(e) => handleDocumentChange('remarks2', e.target.value)}
-                ></textarea>
-              </div>
-              <div className="form-group">
-                <label>Date/Time</label>
-                <input 
-                  type="datetime-local"
-                  value={formData.documents.dateTime}
-                  onChange={(e) => handleDocumentChange('dateTime', e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="document-uploads">
-              <div className="upload-box">
-                <label>Registration Book Copy</label>
-                <input type="file" accept="image/*,.pdf" />
-              </div>
-              <div className="upload-box">
-                <label>Driving License</label>
-                <input type="file" accept="image/*,.pdf" />
               </div>
 
-              <div className="upload-box">
-                <label>Upload NIC</label>
-                <input type="file" accept="image/*,.pdf" />
+              <div className="form-group">
+                <label>EMAIL ADDRESS</label>
+                <input 
+                  type="email" 
+                  placeholder="your@email.com"
+                  value={formData.documentsAndContact.emailAddress}
+                  onChange={(e) => handleInputChange('documentsAndContact', 'emailAddress', e.target.value)}
+                />
               </div>
+
+              <div className="section-divider">REQUIRED DOCUMENTS</div>
+
+              <div className="upload-box">
+                <label>REGISTRATION BOOK COPY <span>*</span></label>
+                <input type="file" accept="image/*,.pdf" onChange={(e) => handleFileUpload('registrationBook', e.target.files[0])} required />
+                <p className="upload-info">PDF or image, max 5MB</p>
+              </div>
+              <div className="upload-box">
+                <label>DRIVING LICENSE <span>*</span></label>
+                <input type="file" accept="image/*,.pdf" onChange={(e) => handleFileUpload('drivingLicense', e.target.files[0])} required />
+                <p className="upload-info">PDF or image, max 5MB</p>
+              </div>
+              <div className="upload-box">
+                <label>CNIC COPY <span>*</span></label>
+                <input type="file" accept="image/*,.pdf" onChange={(e) => handleFileUpload('cnicCopy', e.target.files[0])} required />
+                <p className="upload-info">Front side, PDF or image</p>
+              </div>
+
+
             </div>
           </div>
         );
@@ -552,7 +399,7 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
       if (e.target === e.currentTarget) handleClose();
     }}>
       <div className="modal-content">
-        <button className="close-btn" onClick={handleClose}>&times;</button>
+        <button type="button" className="close-btn" onClick={handleClose}>&times;</button>
         
         <div className="steps-indicator">
           <div className={`step ${step >= 1 ? 'active' : ''}`}>
@@ -561,11 +408,11 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
           </div>
           <div className={`step ${step >= 2 ? 'active' : ''}`}>
             <span>2</span>
-            <p>Claim Form</p>
+            <p>Claim Details</p>
           </div>
           <div className={`step ${step >= 3 ? 'active' : ''}`}>
             <span>3</span>
-            <p>Documents & Contact</p>
+            <p>Documents</p>
           </div>
         </div>
 
@@ -586,23 +433,26 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
           )}
           
           <div className="form-actions">
-            {step > 1 && (
+            {step > 1 ? (
               <button 
                 type="button" 
                 className="back-btn" 
                 onClick={() => setStep(step - 1)}
                 disabled={isSubmitting}
               >
-                Back
+                ← Back
               </button>
+            ) : (
+              <div /> // Spacer
             )}
+            
             {step < 3 ? (
               <button 
                 type="button" 
                 className="next-btn" 
                 onClick={() => setStep(step + 1)}
               >
-                Next
+                {step === 1 ? 'Next — Claim Details →' : 'Next — Documents →'}
               </button>
             ) : (
               <button 
@@ -620,4 +470,4 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
   );
 };
 
-export default NewClaimForm;
+export default NewClaimForm;

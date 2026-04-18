@@ -13,30 +13,73 @@ const AIReport = ({ selectedClaim = null, viewOnly = false, onNavigateToHistory 
   // Check if claim has existing report when component mounts
   React.useEffect(() => {
     if (selectedClaim) {
-      const savedReports = JSON.parse(localStorage.getItem('damageReports') || '[]');
-      // Try to find report for this claim by matching timestamps or claim details
-      const existingReport = savedReports.find(report => {
-        const rNum = report.claim_number || report.claimNumber;
-        const sNum = selectedClaim.claim_number || selectedClaim.claimNumber;
+      const fetchClaimReport = async () => {
+        try {
+        let token = localStorage.getItem('access_token');
         
-        // Match strictly by claim number if available
-        if (rNum && sNum && rNum === sNum) return true;
-        
-        // Fallback for legacy reports that didn't save the claim number
-        if (!rNum && report.date && selectedClaim.created_at) {
-          return new Date(report.date).toDateString() === new Date(selectedClaim.created_at).toDateString();
+        // AUTO-RESCUE
+        if (!token) {
+            const userStr = localStorage.getItem('user');
+            if (userStr) {
+                const userObj = JSON.parse(userStr);
+                try {
+                    const syncRes = await fetch('http://localhost:5000/api/auth/sync_firebase', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            email: userObj.email, 
+                            uid: userObj.uid || userObj.id, 
+                            firstName: userObj.firstName || userObj.first_name, 
+                            lastName: userObj.lastName || userObj.last_name 
+                        })
+                    });
+                    if (syncRes.ok) {
+                        const syncData = await syncRes.json();
+                        token = syncData.access_token;
+                        if (token) localStorage.setItem('access_token', token);
+                    }
+                } catch (e) {
+                    console.log("Auto-rescue token fetch failed", e);
+                }
+            }
         }
-        return false;
-      });
+        
+        if (!token) return;
+
+          const res = await fetch('http://localhost:5000/api/reports', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          if (res.ok) {
+            const savedReports = await res.json();
+            // Match strictly by claim ID (reliable) or claim number (fallback)
+            const sId = selectedClaim.id;
+            const sNum = selectedClaim.claim_number || selectedClaim.claimNumber;
+            
+            const existingReport = savedReports.find(report => {
+              const rId = report.claim_id;
+              const rNum = report.claim_number;
+              
+              if (sId && rId && sId === rId) return true;
+              if (sNum && rNum && sNum === rNum) return true;
+              return false;
+            });
+            
+            if (existingReport) {
+              setAssessmentReport(existingReport);
+              setViewMode(true);
+              setActiveStep(3);
+            } else if (viewOnly) {
+              setViewMode(true);
+              setAssessmentReport(null);
+            }
+          }
+        } catch (err) {
+          console.error("Error loading claim report:", err);
+        }
+      };
       
-      if (existingReport) {
-        setAssessmentReport(existingReport);
-        setViewMode(true);
-        setActiveStep(3);
-      } else if (viewOnly) {
-        setViewMode(true);
-        setAssessmentReport(null);
-      }
+      fetchClaimReport();
     }
   }, [selectedClaim, viewOnly]);
 
@@ -56,68 +99,28 @@ const AIReport = ({ selectedClaim = null, viewOnly = false, onNavigateToHistory 
     "Honda BR-V"
   ];
 
-  const downloadPDF = () => {
+  const downloadPDF = async () => {
     if (!assessmentReport) return;
+    
+    try {
+      const element = document.querySelector('#pdf-content-wrapper');
+      if (!element) return;
+      
+      const opt = {
+        margin:       10,
+        filename:     `IntelliClaims_Report_${assessmentReport.id || 'New'}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true, logging: false },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
 
-    const element = document.createElement('div');
-    element.innerHTML = `
-      <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
-        <h1 style="color: #333; text-align: center; margin-bottom: 10px;">Vehicle Damage Report</h1>
-        <p style="text-align: center; color: #666; margin-bottom: 30px;">Generated on ${new Date().toLocaleDateString()}</p>
-        
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
-          <div style="background: #f9f9f9; padding: 15px; border-radius: 8px;">
-            <h3 style="margin: 0 0 10px; color: #444;">Vehicle Info</h3>
-            <p><strong>Model:</strong> ${assessmentReport.car_model || 'Unknown'}</p>
-            <p><strong>Group:</strong> —</p>
-          </div>
-          <div style="background: #fff7eb; padding: 15px; border-radius: 8px;">
-            <h3 style="margin: 0 0 10px; color: #444;">Damage Summary</h3>
-            <p style="font-size: 18px; font-weight: bold; color: #d46016;">Estimated Repair Cost: PKR ${assessmentReport.total_estimated_cost?.toLocaleString() || '0'}</p>
-          </div>
-        </div>
-        
-        <h3 style="color: #333; margin-bottom: 15px;">Damage Breakdown</h3>
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
-          <thead>
-            <tr style="background: #f5f5f5;">
-              <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Damaged Part</th>
-              <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Severity</th>
-              <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Cost (PKR)</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${assessmentReport.damaged_parts?.map(part => `
-              <tr>
-                <td style="padding: 10px; border: 1px solid #ddd;">${part.part_name}</td>
-                <td style="padding: 10px; border: 1px solid #ddd;">${part.severity}</td>
-                <td style="padding: 10px; border: 1px solid #ddd;">${part.estimated_cost.toLocaleString()}</td>
-              </tr>
-            `).join('') || '<tr><td colspan="3" style="padding: 10px; text-align: center; border: 1px solid #ddd;">No damages detected</td></tr>'}
-          </tbody>
-          <tfoot>
-            <tr style="background: #fffaf2; font-weight: bold;">
-              <td colspan="2" style="padding: 10px; border: 1px solid #ddd;">Total:</td>
-              <td style="padding: 10px; border: 1px solid #ddd;">PKR ${assessmentReport.total_estimated_cost?.toLocaleString() || '0'}</td>
-            </tr>
-          </tfoot>
-        </table>
-        
-        <div style="background: #fff3e8; border: 1px solid #f8dcc7; border-radius: 8px; color: #7d570f; padding: 15px; margin-bottom: 20px;">
-          <strong>Note:</strong> This is an AI-generated report. Please verify with a certified expert.
-        </div>
-      </div>
-    `;
-
-    const opt = {
-      margin: 1,
-      filename: `damage-report-${assessmentReport.car_model || 'unknown'}-${new Date().toISOString().split('T')[0]}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-    };
-
-    html2pdf().set(opt).from(element).save();
+      // Extract raw DOM element to PDF instead of hitting backend (so it looks 100% like the UI)
+      html2pdf().set(opt).from(element).save();
+      
+    } catch (e) {
+      console.error("Error generating PDF:", e);
+      alert("Error generating PDF from screen.");
+    }
   };
 
   const StepIndicator = () => (
@@ -211,19 +214,19 @@ const AIReport = ({ selectedClaim = null, viewOnly = false, onNavigateToHistory 
       <h2>Review Damage</h2>
       <p>Review the detected damage from the uploaded images.</p>
       
-      {assessmentReport?.original_image_base64 && (
+      {(assessmentReport?.original_image_base64 || assessmentReport?.original_image_url) && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginTop: '20px', marginBottom: '20px' }}>
           <div className="damage-card">
              <span className="damage-label">Uploaded</span>
-             <img className="damage-image" src={assessmentReport.original_image_base64} alt="Original" />
+             <img className="damage-image" src={assessmentReport.original_image_url ? `http://localhost:5000${assessmentReport.original_image_url}` : assessmentReport.original_image_base64} alt="Original" />
           </div>
           <div className="damage-card">
              <span className="damage-label">Parts detection</span>
-             <img className="damage-image" src={assessmentReport.parts_image_base64} alt="Parts detection" />
+             <img className="damage-image" src={assessmentReport.parts_image_url ? `http://localhost:5000${assessmentReport.parts_image_url}` : assessmentReport.parts_image_base64} alt="Parts detection" />
           </div>
           <div className="damage-card">
              <span className="damage-label">Severity map</span>
-             <img className="damage-image" src={assessmentReport.severity_image_base64} alt="Severity map" />
+             <img className="damage-image" src={assessmentReport.severity_image_url ? `http://localhost:5000${assessmentReport.severity_image_url}` : assessmentReport.severity_image_base64} alt="Severity map" />
           </div>
         </div>
       )}
@@ -247,27 +250,27 @@ const AIReport = ({ selectedClaim = null, viewOnly = false, onNavigateToHistory 
           </div>
           
           <div className="assessment-table">
-            <div className="table-header">
+            <div className="assessment-table-header">
               <div>Damaged parts</div>
               <div>Severity</div>
               <div style={{ textAlign: 'right' }}>Cost</div>
             </div>
             <div className="table-rows">
               {assessmentReport?.damaged_parts?.length ? assessmentReport.damaged_parts.map((part, idx) => (
-                <div className="table-row" key={idx}>
+                <div className="assessment-table-row" key={idx}>
                   <div>{part.part_name}</div>
                   <div>{part.severity}</div>
                   <div style={{ textAlign: 'right' }}>PKR {part.estimated_cost.toLocaleString()}</div>
                 </div>
               )) : (
-                <div className="table-row empty-row">
-                  No damages detected.
+                <div className="assessment-table-row empty-row">
+                  <div>No damaged parts detected</div>
                 </div>
               )}
             </div>
           </div>
         </div>
-        <div className="table-footer" style={{ textAlign: 'left', padding: '16px 35px', background: '#fff3e8', borderTop: '1px solid #fce4d0' }}>
+        <div className="assessment-table-footer" style={{ textAlign: 'left', padding: '16px 35px', background: '#fff3e8', borderTop: '1px solid #fce4d0' }}>
           <span style={{ color: '#ff8a00', fontWeight: 'bold', fontSize: '15px' }}>
             Total estimated repair cost: PKR {assessmentReport?.total_estimated_cost?.toLocaleString()}
           </span>
@@ -284,35 +287,34 @@ const AIReport = ({ selectedClaim = null, viewOnly = false, onNavigateToHistory 
       <div className="report-step">
         <h2>Generate Report</h2>
 
-        {selectedClaim && (
-          <div className="report-claim-summary" style={{ marginBottom: '20px', padding: '16px', border: '1px solid #e4e4e4', borderRadius: '12px', background: '#fbfbfb' }}>
-            <h3 style={{ marginBottom: '12px' }}>Submitted Claim Summary</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-              <div><strong>Claim No:</strong> {selectedClaim.claim_number || selectedClaim.claimNumber || 'N/A'}</div>
-              <div><strong>Name:</strong> {selectedClaim.name || selectedClaim.email || 'Unknown'}</div>
-              <div><strong>Policy No:</strong> {selectedClaim.policy_no || 'N/A'}</div>
-              <div><strong>Claim Amount:</strong> PKR {(selectedClaim.claim_amount || 0).toLocaleString()}</div>
-              <div><strong>Date:</strong> {selectedClaim.created_at ? new Date(selectedClaim.created_at).toLocaleDateString() : 'N/A'}</div>
+        <div id="pdf-content-wrapper">
+          {selectedClaim && (
+            <div className="report-claim-summary" style={{ marginBottom: '20px', padding: '16px', border: '1px solid #e4e4e4', borderRadius: '12px', background: '#fbfbfb' }}>
+              <h3 style={{ marginBottom: '12px' }}>Submitted Claim Summary</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                <div><strong>Claim No:</strong> {selectedClaim.claim_number || selectedClaim.claimNumber || 'N/A'}</div>
+                <div><strong>Name:</strong> {selectedClaim.name || selectedClaim.email || 'Unknown'}</div>
+                <div><strong>Policy No:</strong> {selectedClaim.policy_no || 'N/A'}</div>
+                <div><strong>Date:</strong> {selectedClaim.created_at ? new Date(selectedClaim.created_at).toLocaleDateString() : 'N/A'}</div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <div className="report-card">
-          <div className="report-card-header">
-            <div>
-              <p className="report-card-title">Vehicle Damage Report</p>
-              <p className="report-card-date">Generated on {generatedDate}</p>
+          <div className="report-card">
+            <div className="report-card-header">
+              <div>
+                <p className="report-card-title">Vehicle Damage Report</p>
+                <p className="report-card-date">Generated on {generatedDate}</p>
+              </div>
+              <button data-html2canvas-ignore="true" className="download-btn" onClick={downloadPDF}>
+                Download PDF
+              </button>
             </div>
-            <button className="download-btn" onClick={downloadPDF}>
-              Download PDF
-            </button>
-          </div>
 
           <div className="report-grid-two report-summary-grid">
             <div className="report-panel">
               <p className="panel-heading">Vehicle Info</p>
               <div className="report-item"><span>Model:</span><span>{assessmentReport?.car_model || 'Unknown'}</span></div>
-              <div className="report-item"><span>Group:</span><span>—</span></div>
             </div>
             <div className="report-panel report-summary-panel">
               <p className="panel-heading">Damage Summary</p>
@@ -352,11 +354,11 @@ const AIReport = ({ selectedClaim = null, viewOnly = false, onNavigateToHistory 
           <div className="report-grid-two report-images-grid">
             <div className="report-image-block">
               <p>Detected Parts</p>
-              <img src={assessmentReport?.parts_image_base64} alt="Detected Parts" />
+              <img src={assessmentReport?.parts_image_url ? `http://localhost:5000${assessmentReport.parts_image_url}` : assessmentReport?.parts_image_base64} alt="Detected Parts" />
             </div>
             <div className="report-image-block">
               <p>Severity Map</p>
-              <img src={assessmentReport?.severity_image_base64} alt="Severity Map" />
+              <img src={assessmentReport?.severity_image_url ? `http://localhost:5000${assessmentReport.severity_image_url}` : assessmentReport?.severity_image_base64} alt="Severity Map" />
             </div>
           </div>
 
@@ -372,6 +374,7 @@ const AIReport = ({ selectedClaim = null, viewOnly = false, onNavigateToHistory 
               <button className="link-button" onClick={() => setActiveStep(1)}>Re-upload image</button>
               <button className="link-button" onClick={onNavigateToHistory}>View History</button>
             </div>
+          </div>
           </div>
         </div>
       </div>
@@ -392,11 +395,47 @@ const AIReport = ({ selectedClaim = null, viewOnly = false, onNavigateToHistory 
       const formData = new FormData();
       formData.append("image", selectedFile);
       formData.append("car_model", carModel);
+      if (selectedClaim?.id) {
+        formData.append("claim_id", selectedClaim.id);
+      }
 
       try {
-        const token = localStorage.getItem("access_token"); 
+        let token = localStorage.getItem("access_token"); 
         
-        const response = await fetch("http://127.0.0.1:5000/api/assess_damage", {
+        // AUTO-RESCUE
+        if (!token) {
+            const userStr = localStorage.getItem('user');
+            if (userStr) {
+                const userObj = JSON.parse(userStr);
+                try {
+                    const syncRes = await fetch('http://localhost:5000/api/auth/sync_firebase', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            email: userObj.email, 
+                            uid: userObj.uid || userObj.id, 
+                            firstName: userObj.firstName || userObj.first_name, 
+                            lastName: userObj.lastName || userObj.last_name 
+                        })
+                    });
+                    if (syncRes.ok) {
+                        const syncData = await syncRes.json();
+                        token = syncData.access_token;
+                        if (token) localStorage.setItem('access_token', token);
+                    }
+                } catch (e) {
+                    console.log("Auto-rescue token fetch failed", e);
+                }
+            }
+        }
+        
+        if (!token) {
+            alert("Your session token is expired. Please fully LOGOUT from the left menu and LOGIN again.");
+            setIsLoading(false);
+            return;
+        }
+        
+        const response = await fetch("http://localhost:5000/api/assess_damage", {
           method: "POST",
           headers: {
             ...(token ? {"Authorization": `Bearer ${token}`} : {})
@@ -410,16 +449,6 @@ const AIReport = ({ selectedClaim = null, viewOnly = false, onNavigateToHistory 
         }
         
         setAssessmentReport(data);
-        // Save to history including claim identifier
-        const reportWithDate = { 
-          ...data, 
-          date: new Date().toISOString(),
-          claim_number: selectedClaim?.claim_number || selectedClaim?.claimNumber,
-          created_at: selectedClaim?.created_at
-        };
-        const existingHistory = JSON.parse(localStorage.getItem('damageReports') || '[]');
-        existingHistory.push(reportWithDate);
-        localStorage.setItem('damageReports', JSON.stringify(existingHistory));
         setActiveStep(2);
       } catch(e) {
         alert("Error: " + e.message);

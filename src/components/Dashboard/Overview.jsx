@@ -10,6 +10,13 @@ const Overview = () => {
   const { user } = useUser();
   const [claims, setClaims] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [userStats, setUserStats] = useState({
+    total_repair_cost: 0,
+    most_frequent_part: 'N/A',
+    claim_count: 0,
+    loading: true,
+    error: false
+  });
 
   // Notifications State
   const [notifications, setNotifications] = useState([]);
@@ -19,19 +26,16 @@ const Overview = () => {
   useEffect(() => {
     const fetchNotifications = async () => {
       const token = localStorage.getItem('access_token');
-      const email = user?.email;
       
-      if (!token && !email) return;
+      if (!token) return;
 
       try {
-        let url = 'http://localhost:5000/api/notifications';
-        let options = { headers: {} };
-
-        if (token) {
-          options.headers['Authorization'] = `Bearer ${token}`;
-        } else if (email) {
-          url = `http://localhost:5000/api/notifications/user?email=${encodeURIComponent(email)}`;
-        }
+        let url = 'http://127.0.0.1:5000/api/notifications/user';
+        let options = { 
+          headers: {
+            'Authorization': `Bearer ${token}`
+          } 
+        };
 
         const res = await fetch(url, options);
         if (res.ok) {
@@ -50,25 +54,20 @@ const Overview = () => {
 
   const markNotificationAsRead = async (id) => {
     const token = localStorage.getItem('access_token');
-    const email = user?.email;
     
-    if (!token && !email) return;
+    if (!token) return;
 
     try {
-      let url = `http://localhost:5000/api/notifications/${id}/read`;
-      let options = { 
+      const res = await fetch(`http://127.0.0.1:5000/api/notifications/${id}/read`, { 
         method: 'PUT',
-        headers: {} 
-      };
+        headers: {
+          'Authorization': `Bearer ${token}`
+        } 
+      });
 
-      if (token) {
-        options.headers['Authorization'] = `Bearer ${token}`;
-      } else if (email) {
-        url = `http://localhost:5000/api/notifications/user/${id}/read?email=${encodeURIComponent(email)}`;
+      if (res.ok) {
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
       }
-
-      await fetch(url, options);
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
     } catch (err) {
       console.error(err);
     }
@@ -76,41 +75,24 @@ const Overview = () => {
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  const loadLocalClaims = () => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('localClaims') || '[]');
-      const parsed = Array.isArray(saved) ? saved : [];
-      if (!user?.email) return [];
-      return parsed.filter(c => (c.email || '').toLowerCase() === user.email.toLowerCase());
-    } catch (err) {
-      console.error('Error loading local claims:', err);
-      return [];
-    }
-  };
-
-  // Fetch claims from backend - only user's claims
+  // Fetch claims strictly from database
   useEffect(() => {
     const fetchClaims = async () => {
       try {
         const token = localStorage.getItem('access_token');
-        const email = user?.email;
-        console.log("🔐 Auth Check -> Token:", !!token, "Email:", email);
         
-        if (!token && !email) {
-          console.warn("❌ No token or email found, falling back to local storage only.");
-          setClaims(loadLocalClaims());
+        if (!token) {
+          console.warn("❌ No token found, aborting claim fetch.");
+          setClaims([]);
           setLoading(false);
           return;
         }
 
-        let url = 'http://localhost:5000/api/admin/claims';
-        let options = { headers: {} };
-
-        if (token) {
-          options.headers['Authorization'] = `Bearer ${token}`;
-        }
-
-        const response = await fetch(url, options);
+        const response = await fetch('http://127.0.0.1:5000/api/claims/user', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
 
         console.log("📡 API Response Status:", response.status);
 
@@ -124,29 +106,41 @@ const Overview = () => {
           console.error("❌ API Error:", response.status, errorData);
         }
 
-        const localClaims = loadLocalClaims();
-        const mergedMap = new Map();
-        
-        localClaims.forEach(c => {
-          const id = c.claim_number || c.claimNumber;
-          if (id) mergedMap.set(id, c);
-        });
-
-        data.forEach(c => {
-          const id = c.claim_number || c.claimNumber;
-          if (id) mergedMap.set(id, c);
-        });
-
-        const finalClaims = Array.from(mergedMap.values());
-        
         // Sort by date descending
-        finalClaims.sort((a, b) => {
+        data.sort((a, b) => {
           const dateA = a.created_at || a.date_time || a.date;
           const dateB = b.created_at || b.date_time || b.date;
           return new Date(dateB) - new Date(dateA);
         });
 
-        setClaims(finalClaims);
+        setClaims(data);
+
+        // Fetch Analytics Stats from Backend
+        console.log("📊 Fetching backend stats with token:", token.substring(0, 10) + "...");
+        try {
+          setUserStats(prev => ({ ...prev, loading: true }));
+          const statsRes = await fetch('http://127.0.0.1:5000/api/user/stats', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          if (statsRes.ok) {
+            const statsData = await statsRes.json();
+            console.log("✅ Backend Stats Received:", statsData);
+            setUserStats({ 
+              ...statsData, 
+              loading: false, 
+              error: false,
+              raw_response: JSON.stringify(statsData) 
+            });
+          } else {
+            const errText = await statsRes.text();
+            console.error("❌ Stats API Error:", statsRes.status, errText);
+            setUserStats(prev => ({ ...prev, loading: false, error: true, errorMsg: `Error ${statsRes.status}` }));
+          }
+        } catch (err) {
+          console.error("❌ Stats Fetch Exception:", err);
+          setUserStats(prev => ({ ...prev, loading: false, error: true, errorMsg: err.message }));
+        }
 
       } catch (error) {
         console.error("❌ Network Error:", error);
@@ -176,24 +170,58 @@ const Overview = () => {
   const userName = user ? `${user.first_name || user.firstName || ""} ${user.last_name || user.lastName || ""}`.trim() : "Claims Manager";
   const userEmail = user?.email || "user@example.com";
 
-  // Calculate statistics from user's claims only
+  // Calculate statistics from user's claims and global trends
   const stats = useMemo(() => {
-    if (!claims || claims.length === 0) {
-      return {
-        totalClaims: 0,
-        topDamagedPart: 'N/A',
-        topSeverity: 'N/A',
-        totalCost: 0,
-        topVehicleModels: [],
-        statusData: [],
-        severityData: [],
-        timelineData: []
-      };
-    }
-
+    // IMPORTANT: Distinguish between Personal Stats and Global Trends
     const totalClaims = claims.length;
 
-    // Top damaged part
+    // Use Global Data for the company-wide charts if available from backend
+    // otherwise fallback to personalized data calculations
+    const globalTopModels = userStats?.global_stats?.top_models || [];
+    const globalStatusDist = userStats?.global_stats?.status_distribution;
+
+    // 1. Top Vehicle Models (Company Wide)
+    let topVehicleModels = [];
+    if (globalTopModels.length > 0) {
+      topVehicleModels = globalTopModels;
+    } else {
+      // Fallback to local calculation
+      const vehicleModels = {};
+      claims.forEach(claim => {
+        if (claim.vehicle_type || claim.vehicle_make) {
+          const model = claim.vehicle_type || claim.vehicle_make;
+          vehicleModels[model] = (vehicleModels[model] || 0) + 1;
+        }
+      });
+      topVehicleModels = Object.entries(vehicleModels)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([model, count]) => ({ model, count }));
+    }
+
+    // 2. Claim Status Distribution (Company Wide)
+    let statusPieData = [];
+    if (globalStatusDist) {
+       statusPieData = [
+         { name: 'Pending', value: globalStatusDist.Pending || 0, color: '#f59e0b' },
+         { name: 'Approved', value: globalStatusDist.Approved || 0, color: '#10b981' },
+         { name: 'Rejected', value: globalStatusDist.Rejected || 0, color: '#ef4444' }
+       ].filter(s => s.value > 0);
+    } else {
+      const statusCountsRaw = { Pending: 0, Approved: 0, Rejected: 0 };
+      claims.forEach(claim => {
+        if (claim.status && statusCountsRaw.hasOwnProperty(claim.status)) {
+          statusCountsRaw[claim.status]++;
+        }
+      });
+      statusPieData = [
+        { name: 'Pending', value: statusCountsRaw.Pending, color: '#f59e0b' },
+        { name: 'Approved', value: statusCountsRaw.Approved, color: '#10b981' },
+        { name: 'Rejected', value: statusCountsRaw.Rejected, color: '#ef4444' }
+      ].filter(s => s.value > 0);
+    }
+
+    // 3. Top Damaged Part (Personal Fallback)
     const damagedParts = {};
     claims.forEach(claim => {
       if (claim.missing_parts) {
@@ -204,71 +232,57 @@ const Overview = () => {
       ? Object.keys(damagedParts).reduce((a, b) => damagedParts[a] > damagedParts[b] ? a : b)
       : 'N/A';
 
-    // Top severity & Distribution
-    const severityMap = { Minor: 0, Moderate: 0, Severe: 0 };
-    claims.forEach(claim => {
-       const amount = claim.claim_amount || 0;
-       if (amount > 100000) severityMap.Severe++;
-       else if (amount > 25000) severityMap.Moderate++;
-       else severityMap.Minor++;
-    });
-    const topSeverity = Object.keys(severityMap).reduce((a, b) => severityMap[a] > severityMap[b] ? a : b);
+    // 4. Severity Distribution (Global)
+    let severityData = [];
+    const globalSev = userStats?.global_stats?.severity_distribution;
+    if (globalSev) {
+       severityData = [
+         { name: 'Minor', value: globalSev.Minor, color: '#3b82f6' },
+         { name: 'Moderate', value: globalSev.Moderate, color: '#f59e0b' },
+         { name: 'Severe', value: globalSev.Severe, color: '#ef4444' }
+       ].filter(s => s.value > 0);
+    } else {
+      const severityMap = { Minor: 0, Moderate: 0, Severe: 0 };
+      claims.forEach(claim => {
+         const amount = claim.claim_amount || 0;
+         if (amount > 100000) severityMap.Severe++;
+         else if (amount > 25000) severityMap.Moderate++;
+         else severityMap.Minor++;
+      });
+      severityData = [
+        { name: 'Minor', value: severityMap.Minor, color: '#3b82f6' },
+        { name: 'Moderate', value: severityMap.Moderate, color: '#f59e0b' },
+        { name: 'Severe', value: severityMap.Severe, color: '#ef4444' }
+      ].filter(s => s.value > 0);
+    }
     
-    const severityData = [
-      { name: 'Minor', value: severityMap.Minor, color: '#3b82f6' },
-      { name: 'Moderate', value: severityMap.Moderate, color: '#f59e0b' },
-      { name: 'Severe', value: severityMap.Severe, color: '#ef4444' }
-    ].filter(s => s.value > 0);
+    // Fallback for topSeverity calculation
+    const topSeverity = severityData.length > 0 
+      ? severityData.reduce((prev, current) => (prev.value > current.value) ? prev : current).name 
+      : 'N/A';
 
-    // Timeline Data (Group by Date)
-    const timelineMap = {};
-    claims.forEach(claim => {
-      const dateStr = claim.created_at || claim.date_time;
-      if (!dateStr) return;
-      
-      const date = new Date(dateStr);
-      // Format as Month Day (e.g., "Apr 09")
-      const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      
-      if (!timelineMap[formattedDate]) {
-        timelineMap[formattedDate] = { date: formattedDate, claims: 0, cost: 0 };
-      }
-      timelineMap[formattedDate].claims += 1;
-      timelineMap[formattedDate].cost += (claim.claim_amount || 0);
-    });
-    
-    // Sort by date chronologically
-    const timelineData = Object.values(timelineMap).sort((a, b) => new Date(a.date) - new Date(b.date));
+    // 5. Timeline Data (Global)
+    let timelineData = [];
+    if (userStats?.global_stats?.timeline?.length > 0) {
+      timelineData = userStats.global_stats.timeline;
+    } else {
+      const timelineMap = {};
+      claims.forEach(claim => {
+        const dateStr = claim.created_at || claim.date_time;
+        if (!dateStr) return;
+        const date = new Date(dateStr);
+        const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        if (!timelineMap[formattedDate]) {
+          timelineMap[formattedDate] = { date: formattedDate, claims: 0, cost: 0 };
+        }
+        timelineMap[formattedDate].claims += 1;
+        timelineMap[formattedDate].cost += (claim.claim_amount || 0);
+      });
+      timelineData = Object.values(timelineMap).sort((a, b) => new Date(a.date) - new Date(b.date));
+    }
 
-    // Claim Status Distribution
-    const statusCountsRaw = { Pending: 0, Approved: 0, Rejected: 0 };
-    claims.forEach(claim => {
-      if (claim.status && statusCountsRaw.hasOwnProperty(claim.status)) {
-        statusCountsRaw[claim.status]++;
-      }
-    });
-    
-    const statusPieData = [
-      { name: 'Pending', value: statusCountsRaw.Pending, color: '#f59e0b' },
-      { name: 'Approved', value: statusCountsRaw.Approved, color: '#10b981' },
-      { name: 'Rejected', value: statusCountsRaw.Rejected, color: '#ef4444' }
-    ].filter(s => s.value > 0);
-
-    // Total cost
+    // 6. Total cost (Personal)
     const totalCost = claims.reduce((sum, claim) => sum + (claim.claim_amount || 0), 0);
-
-    // Top vehicle models
-    const vehicleModels = {};
-    claims.forEach(claim => {
-      if (claim.vehicle_type || claim.vehicle_make) {
-        const model = claim.vehicle_type || claim.vehicle_make;
-        vehicleModels[model] = (vehicleModels[model] || 0) + 1;
-      }
-    });
-    const topVehicleModels = Object.entries(vehicleModels)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([model, count]) => ({ model, count }));
 
     return {
       totalClaims,
@@ -278,15 +292,37 @@ const Overview = () => {
       topVehicleModels,
       statusData: statusPieData,
       severityData,
-      timelineData
+      timelineData,
+      global_total_claims: userStats?.global_stats?.total_claims
     };
-  }, [claims]);
+  }, [claims, userStats]);
 
   // Colors for charts
   const barColors = ['#f97316', '#fbb780', '#fddec5', '#e2e8f0', '#cbd5e1'];
 
   return (
     <div className="overview-container">
+
+
+      {/* Diagnostic Error Banner */}
+      {userStats.error && (
+        <div style={{ 
+          background: '#fee2e2', 
+          color: '#dc2626', 
+          padding: '1rem', 
+          borderRadius: '8px', 
+          marginBottom: '1rem',
+          border: '1px solid #ef4444',
+          fontSize: '0.9rem'
+        }}>
+          <strong>⚠️ Data Sync Error:</strong> {userStats.errorMsg || 'Failed to reach the analytics server.'}
+          <br />
+          <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>
+            Ensure backend server is running and CORS is enabled.
+          </span>
+        </div>
+      )}
+
       {/* User Profile Card */}
       <div className="user-profile-card">
         <div className="profile-avatar">{userInitials}</div>
@@ -461,8 +497,8 @@ const Overview = () => {
           <div className="stat-header">
             <h3>Total Claims Submitted</h3>
           </div>
-          <div className="stat-value">{loading ? '...' : stats.totalClaims}</div>
-          <div className="stat-label">All Time</div>
+          <div className="stat-value">{userStats.loading ? '...' : (userStats.global_stats?.total_claims || stats.global_total_claims || 0)}</div>
+          <div className="stat-label">Company Total</div>
         </div>
 
         <div className="stat-card">
@@ -470,9 +506,9 @@ const Overview = () => {
             <h3>Top Damaged Part</h3>
           </div>
           <div className="stat-value" style={{ textTransform: 'capitalize' }}>
-            {loading ? '...' : (stats.topDamagedPart.replace(/_/g, ' ') || 'N/A')}
+            {userStats.loading ? '...' : (userStats.global_stats?.top_part || 'N/A')}
           </div>
-          <div className="stat-label">Most frequent</div>
+          <div className="stat-label">Most Hit (Global)</div>
         </div>
 
         <div className="stat-card">
@@ -489,8 +525,8 @@ const Overview = () => {
           <div className="stat-header">
             <h3>Estimated Repair Cost</h3>
           </div>
-          <div className="stat-value">Rs {loading ? '...' : stats.totalCost.toLocaleString()}</div>
-          <div className="stat-label">Total Amount</div>
+          <div className="stat-value">Rs {userStats.loading ? '...' : (userStats.global_stats?.total_cost || 0).toLocaleString()}</div>
+          <div className="stat-label">Total System Value</div>
         </div>
       </div>
 

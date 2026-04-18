@@ -17,7 +17,7 @@ try:
         # Try to use environment variables
         private_key = os.getenv('FIREBASE_PRIVATE_KEY', '').replace('\\n', '\n')
         
-        if private_key and os.getenv('FIREBASE_PROJECT_ID') and os.getenv('FIREBASE_CLIENT_EMAIL'):
+        if private_key and "your_private_key_here" not in private_key and os.getenv('FIREBASE_PROJECT_ID'):
             service_account = {
                 "type": "service_account",
                 "project_id": os.getenv('FIREBASE_PROJECT_ID'),
@@ -33,11 +33,10 @@ try:
             db = firestore.client()
             print("✓ Firebase initialized with environment variables")
         else:
-            raise ValueError("Missing Firebase credentials")
+            print("⚠ Firebase credentials missing or placeholder found in .env")
+            db = None
             
 except Exception as e:
     print(f"⚠ Firebase initialization failed: {e}")
-    print("Running in MOCK MODE - Firebase operations will not work")
-    print("To fix this, add serviceAccountKey.json to the backend folder")
-    # Create a mock db object for development
+    print("Running in LOCAL MODE - Using SQL database instead of Firestore")
     db = None

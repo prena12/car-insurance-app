@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useUser } from '../../contexts/UserContext';
 import './ClaimsList.css';
 
@@ -8,36 +8,23 @@ const ClaimsList = ({ refresh = 0, searchTerm = '', onOpenAIReport = () => { } }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const loadLocalClaims = () => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('localClaims') || '[]');
-      const parsed = Array.isArray(saved) ? saved : [];
-      if (!user?.email) return [];
-      return parsed.filter(c => (c.email || '').toLowerCase() === user.email.toLowerCase());
-    } catch (err) {
-      console.error('Error loading local claims:', err);
-      return [];
-    }
-  };
-
   const [filteredClaims, setFilteredClaims] = useState([]);
 
-  const fetchClaims = async () => {
+  const fetchClaims = useCallback(async () => {
     setLoading(true);
     setError('');
 
     const token = localStorage.getItem('access_token');
     const email = user?.email;
-    const localClaims = loadLocalClaims();
 
     if (!token && !email) {
-      setClaims(localClaims);
+      setClaims([]);
       setLoading(false);
       return;
     }
 
     try {
-      let url = 'http://localhost:5000/api/admin/claims';
+      let url = 'http://localhost:5000/api/claims/user';
       let options = { headers: {} };
 
       if (token) {
@@ -52,49 +39,31 @@ const ClaimsList = ({ refresh = 0, searchTerm = '', onOpenAIReport = () => { } }
       }
 
       const data = await response.json();
-      const localClaims = loadLocalClaims();
-
-      // Merge backend data over localClaims to ensure updated statuses override local
-      const mergedMap = new Map();
-      localClaims.forEach(c => {
-        const id = c.claim_number || c.claimNumber;
-        if (id) mergedMap.set(id, c);
-      });
-
-      data.forEach(c => {
-        const id = c.claim_number || c.claimNumber;
-        if (id) mergedMap.set(id, c); // Backend overrides local
-      });
-
-      const finalClaims = Array.from(mergedMap.values());
 
       // Sort by date descending
-      finalClaims.sort((a, b) => {
+      data.sort((a, b) => {
         const dateA = a.created_at || a.date_time || a.date;
         const dateB = b.created_at || b.date_time || b.date;
         return new Date(dateB) - new Date(dateA);
       });
 
-      setClaims(finalClaims);
+      setClaims(data);
     } catch (err) {
       console.error('Error fetching claims:', err);
-      setError(err.message || 'Could not load claims. Showing saved local claims.');
-      setClaims(localClaims);
+      setError(err.message || 'Could not load claims from database.');
+      setClaims([]);
     } finally {
       setLoading(false);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, refresh]);
 
-  // Auto-refresh every 10 seconds to pick up status changes from admin
+  // Load claims once on mount and when refresh counter changes (no auto-polling)
   useEffect(() => {
     if (user) {
       fetchClaims();
     }
-    const interval = setInterval(() => {
-      if (user) fetchClaims();
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [user, refresh]);
+  }, [fetchClaims]);
 
   useEffect(() => {
     const normalizedTerm = searchTerm.trim().toLowerCase();
@@ -133,7 +102,6 @@ const ClaimsList = ({ refresh = 0, searchTerm = '', onOpenAIReport = () => { } }
           <td>{claim.claim_number || claim.claimNumber || 'N/A'}</td>
           <td>{customerName}</td>
           <td>{createdAt}</td>
-          <td>{amount}</td>
           <td>
             <span className={`status ${getStatusClass(status)}`}>
               {status}
@@ -151,6 +119,14 @@ const ClaimsList = ({ refresh = 0, searchTerm = '', onOpenAIReport = () => { } }
 
   return (
     <div className="claims-list">
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+        <button 
+          onClick={() => fetchClaims()} 
+          style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: '6px', padding: '6px 14px', color: '#f97316', fontWeight: 600, cursor: 'pointer', fontSize: '13px' }}
+        >
+          🔄 Refresh
+        </button>
+      </div>
       <div className="table-container">
         <table className="claims-table">
           <thead>
@@ -158,7 +134,6 @@ const ClaimsList = ({ refresh = 0, searchTerm = '', onOpenAIReport = () => { } }
               <th>Claim Number</th>
               <th>Customer Name</th>
               <th>Date</th>
-              <th>Amount</th>
               <th>Status</th>
               <th>AI Report</th>
             </tr>

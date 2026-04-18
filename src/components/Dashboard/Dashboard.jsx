@@ -54,6 +54,7 @@ const Dashboard = () => {
     setShowAIReportModal(true); // Open AI Report in Modal overlay
   };
 
+
   const renderContent = () => {
     switch (activeSection) {
       case 'overview':
@@ -93,8 +94,20 @@ const Dashboard = () => {
     setActiveSection(section);
   };
 
+  useEffect(() => {
+    // Auth Guard: If no token, kick back to login selection
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      navigate('/login-selection', { replace: true });
+    }
+  }, [navigate]);
+
   const handleLogout = () => {
-    navigate('/login-selection');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('user');
+    sessionStorage.clear();
+    // Use replace: true so back button doesn't return to private dashboard
+    navigate('/login-selection', { replace: true });
   };
 
   // Header always visible; search only for claims section
@@ -217,7 +230,7 @@ const Dashboard = () => {
       {showNewClaim && (
         <NewClaimForm
           onClose={() => setShowNewClaim(false)}
-          onSuccess={handleNewClaimSuccess}
+          onSuccess={(claim) => handleNewClaimSuccess(claim)}
         />
       )}
 

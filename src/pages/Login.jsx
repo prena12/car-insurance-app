@@ -48,7 +48,7 @@ export default function UserLogin() {
             
             setUser(userData);
             localStorage.setItem('user', JSON.stringify(userData));
-            navigate("/user-dashboard");
+            navigate("/user-dashboard", { replace: true });
             return; // Success, exit function
           }
         } catch (backendError) {
@@ -81,10 +81,38 @@ export default function UserLogin() {
         }
 
         if (userData) {
+          console.log("Syncing with backend...");
+          try {
+            const syncRes = await fetch('http://localhost:5000/api/auth/sync_firebase', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: authUser.email,
+                    uid: authUser.uid,
+                    firstName: userData.firstName,
+                    lastName: userData.lastName
+                })
+            });
+            if (syncRes.ok) {
+                const syncData = await syncRes.json();
+                console.log("Backend sync successful:", syncData);
+                localStorage.setItem('access_token', syncData.access_token);
+                // merge claim_number into userData
+                if (syncData.user?.claim_number) {
+                    userData.claim_number = syncData.user.claim_number;
+                    userData.claimNumber = syncData.user.claim_number;
+                }
+            } else {
+                console.warn("Backend sync failed, UI might lack some features");
+            }
+          } catch(syncErr) {
+              console.warn("Backend sync network error. Backend likely offline.");
+          }
+
           console.log("Setting user in context:", userData);
           setUser(userData);
           localStorage.setItem('user', JSON.stringify(userData));
-          navigate("/user-dashboard");
+          navigate("/user-dashboard", { replace: true });
         } else {
           setError("User data not found. Please sign up first.");
         }

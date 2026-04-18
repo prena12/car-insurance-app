@@ -74,7 +74,7 @@ export default function LoginSelection() {
             onMouseOver={(e) => e.target.style.background = '#e67e00'}
             onMouseOut={(e) => e.target.style.background = '#ff8a00'}
           >
-            👨‍💼 Admin Login
+            🏢 Insurance Company Login
           </button>
 
           <button
