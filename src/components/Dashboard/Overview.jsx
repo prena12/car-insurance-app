@@ -88,7 +88,7 @@ const Overview = () => {
           return;
         }
 
-        const response = await fetch('http://127.0.0.1:5000/api/claims/user', {
+        const response = await fetch('http://127.0.0.1:5000/api/claims', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -172,18 +172,17 @@ const Overview = () => {
 
   // Calculate statistics from user's claims and global trends
   const stats = useMemo(() => {
-    // IMPORTANT: Distinguish between Personal Stats and Global Trends
+    // IMPORTANT: Focus on Personal Stats
     const totalClaims = claims.length;
 
-    // Use Global Data for the company-wide charts if available from backend
-    // otherwise fallback to personalized data calculations
-    const globalTopModels = userStats?.global_stats?.top_models || [];
-    const globalStatusDist = userStats?.global_stats?.status_distribution;
+    // Use Personal Data from backend
+    const personaTopModels = userStats?.personal_stats?.top_models || [];
+    const personalStatusDist = userStats?.personal_stats?.status_distribution;
 
-    // 1. Top Vehicle Models (Company Wide)
+    // 1. Top Vehicle Models (Personal)
     let topVehicleModels = [];
-    if (globalTopModels.length > 0) {
-      topVehicleModels = globalTopModels;
+    if (personaTopModels.length > 0) {
+      topVehicleModels = personaTopModels;
     } else {
       // Fallback to local calculation
       const vehicleModels = {};
@@ -199,13 +198,13 @@ const Overview = () => {
         .map(([model, count]) => ({ model, count }));
     }
 
-    // 2. Claim Status Distribution (Company Wide)
+    // 2. Claim Status Distribution (Personal)
     let statusPieData = [];
-    if (globalStatusDist) {
+    if (personalStatusDist) {
        statusPieData = [
-         { name: 'Pending', value: globalStatusDist.Pending || 0, color: '#f59e0b' },
-         { name: 'Approved', value: globalStatusDist.Approved || 0, color: '#10b981' },
-         { name: 'Rejected', value: globalStatusDist.Rejected || 0, color: '#ef4444' }
+         { name: 'Pending', value: personalStatusDist.Pending || 0, color: '#f59e0b' },
+         { name: 'Approved', value: personalStatusDist.Approved || 0, color: '#10b981' },
+         { name: 'Rejected', value: personalStatusDist.Rejected || 0, color: '#ef4444' }
        ].filter(s => s.value > 0);
     } else {
       const statusCountsRaw = { Pending: 0, Approved: 0, Rejected: 0 };
@@ -232,14 +231,14 @@ const Overview = () => {
       ? Object.keys(damagedParts).reduce((a, b) => damagedParts[a] > damagedParts[b] ? a : b)
       : 'N/A';
 
-    // 4. Severity Distribution (Global)
+    // 4. Severity Distribution (Personal)
     let severityData = [];
-    const globalSev = userStats?.global_stats?.severity_distribution;
-    if (globalSev) {
+    const personalSev = userStats?.personal_stats?.severity_distribution;
+    if (personalSev) {
        severityData = [
-         { name: 'Minor', value: globalSev.Minor, color: '#3b82f6' },
-         { name: 'Moderate', value: globalSev.Moderate, color: '#f59e0b' },
-         { name: 'Severe', value: globalSev.Severe, color: '#ef4444' }
+         { name: 'Minor', value: personalSev.Minor, color: '#3b82f6' },
+         { name: 'Moderate', value: personalSev.Moderate, color: '#f59e0b' },
+         { name: 'Severe', value: personalSev.Severe, color: '#ef4444' }
        ].filter(s => s.value > 0);
     } else {
       const severityMap = { Minor: 0, Moderate: 0, Severe: 0 };
@@ -261,10 +260,10 @@ const Overview = () => {
       ? severityData.reduce((prev, current) => (prev.value > current.value) ? prev : current).name 
       : 'N/A';
 
-    // 5. Timeline Data (Global)
+    // 5. Timeline Data (Personal)
     let timelineData = [];
-    if (userStats?.global_stats?.timeline?.length > 0) {
-      timelineData = userStats.global_stats.timeline;
+    if (userStats?.personal_stats?.timeline?.length > 0) {
+      timelineData = userStats.personal_stats.timeline;
     } else {
       const timelineMap = {};
       claims.forEach(claim => {
@@ -495,20 +494,22 @@ const Overview = () => {
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-header">
-            <h3>Total Claims Submitted</h3>
+            <h3>My Claims</h3>
           </div>
-          <div className="stat-value">{userStats.loading ? '...' : (userStats.global_stats?.total_claims || stats.global_total_claims || 0)}</div>
-          <div className="stat-label">Company Total</div>
+          <div className="stat-value">
+            {userStats.loading ? '...' : (userStats.personal_stats?.total_claims || 0)}
+          </div>
+          <div className="stat-label">Total Submitted</div>
         </div>
 
         <div className="stat-card">
           <div className="stat-header">
-            <h3>Top Damaged Part</h3>
+            <h3>Total Cost</h3>
           </div>
-          <div className="stat-value" style={{ textTransform: 'capitalize' }}>
-            {userStats.loading ? '...' : (userStats.global_stats?.top_part || 'N/A')}
+          <div className="stat-value">
+            {userStats.loading ? '...' : (userStats.personal_stats?.total_cost ? `Rs. ${userStats.personal_stats.total_cost.toLocaleString()}` : 'Rs. 0')}
           </div>
-          <div className="stat-label">Most Hit (Global)</div>
+          <div className="stat-label">Estimated Repairs</div>
         </div>
 
         <div className="stat-card">
@@ -523,10 +524,12 @@ const Overview = () => {
 
         <div className="stat-card">
           <div className="stat-header">
-            <h3>Estimated Repair Cost</h3>
+            <h3>Top Model</h3>
           </div>
-          <div className="stat-value">Rs {userStats.loading ? '...' : (userStats.global_stats?.total_cost || 0).toLocaleString()}</div>
-          <div className="stat-label">Total System Value</div>
+          <div className="stat-value" style={{ textTransform: 'capitalize' }}>
+            {userStats.loading ? '...' : (userStats.personal_stats?.top_models?.[0]?.model || 'N/A')}
+          </div>
+          <div className="stat-label">Most Claimed Vehicle</div>
         </div>
       </div>
 

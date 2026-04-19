@@ -7,6 +7,7 @@ const ClaimsList = ({ refresh = 0, searchTerm = '', onOpenAIReport = () => { } }
   const [claims, setClaims] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [viewReasonData, setViewReasonData] = useState(null);
 
   const [filteredClaims, setFilteredClaims] = useState([]);
 
@@ -24,7 +25,7 @@ const ClaimsList = ({ refresh = 0, searchTerm = '', onOpenAIReport = () => { } }
     }
 
     try {
-      let url = 'http://localhost:5000/api/claims/user';
+      let url = 'http://localhost:5000/api/claims';
       let options = { headers: {} };
 
       if (token) {
@@ -108,6 +109,13 @@ const ClaimsList = ({ refresh = 0, searchTerm = '', onOpenAIReport = () => { } }
             </span>
           </td>
           <td>
+            {status !== 'Pending' && (
+              <button onClick={() => setViewReasonData(claim)} style={{ background: '#f8fafc', border: '1px solid #cbd5e0', padding: '6px 12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: '600', color: '#2d3748' }}>
+                View
+              </button>
+            )}
+          </td>
+          <td>
             <button className="ai-report-btn" onClick={() => onOpenAIReport(claim)}>
               AI Report
             </button>
@@ -135,6 +143,7 @@ const ClaimsList = ({ refresh = 0, searchTerm = '', onOpenAIReport = () => { } }
               <th>Customer Name</th>
               <th>Date</th>
               <th>Status</th>
+              <th>Action</th>
               <th>AI Report</th>
             </tr>
           </thead>
@@ -158,6 +167,28 @@ const ClaimsList = ({ refresh = 0, searchTerm = '', onOpenAIReport = () => { } }
           <div className="error-message">{error}</div>
         )}
       </div>
+
+      {viewReasonData && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setViewReasonData(null)}>
+          <div style={{ background: 'white', padding: '24px', borderRadius: '12px', width: '400px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, color: '#1a202c' }}>Claim Update</h3>
+              <button onClick={() => setViewReasonData(null)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#a0aec0' }}>&times;</button>
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <p style={{ margin: '0 0 8px 0', fontSize: '14px' }}><strong>Claim No:</strong> {viewReasonData.claim_number || viewReasonData.claimNumber}</p>
+              <p style={{ margin: '0 0 8px 0', fontSize: '14px' }}><strong>Status:</strong> <span className={`status ${getStatusClass(viewReasonData.status)}`}>{viewReasonData.status}</span></p>
+            </div>
+            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #edf2f7' }}>
+              <label style={{ display: 'block', fontSize: '12px', textTransform: 'uppercase', fontWeight: 'bold', color: '#a0aec0', marginBottom: '8px' }}>Admin Official Reason</label>
+              <p style={{ margin: 0, fontSize: '14px', color: '#2d3748', lineHeight: '1.5' }}>
+                {viewReasonData.admin_remarks || 'Your claim has been processed by our team.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

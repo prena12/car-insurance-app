@@ -6,6 +6,8 @@ const AdminPolicies = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
+  const [selectedPolicy, setSelectedPolicy] = useState(null);
+
   const fetchPolicies = async () => {
     try {
       const token = localStorage.getItem('staff_token') || localStorage.getItem('access_token');
@@ -145,7 +147,7 @@ const AdminPolicies = () => {
                       {p.claim_count || 0}
                     </td>
                     <td>
-                      <button style={{ 
+                      <button onClick={() => setSelectedPolicy(p)} style={{ 
                         background: 'none', 
                         border: 'none', 
                         color: '#f97316', 
@@ -164,6 +166,69 @@ const AdminPolicies = () => {
           </table>
         )}
       </div>
+
+      {/* Modern Detailed Views Modal overlay */}
+      {selectedPolicy && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0, 0, 0, 0.4)', backdropFilter: 'blur(4px)',
+          display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999
+        }} onClick={() => setSelectedPolicy(null)}>
+          
+          <div style={{
+            background: 'white', borderRadius: '16px', width: '500px', maxWidth: '90%',
+            overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', cursor: 'default'
+          }} onClick={e => e.stopPropagation()}>
+            
+            {/* Header */}
+            <div style={{ background: '#f8fafc', padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, color: '#1a202c', fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  Policy Details
+                  <span className={`status-pill ${selectedPolicy.status?.toLowerCase() === 'active' ? 'approved' : 'rejected'}`} style={{ fontSize: '11px', marginLeft: '8px' }}>
+                    {selectedPolicy.status || 'Active'}
+                  </span>
+                </h3>
+                <p style={{ margin: '4px 0 0', color: '#718096', fontSize: '13px' }}>{selectedPolicy.policy_number}</p>
+              </div>
+              <button onClick={() => setSelectedPolicy(null)} style={{ background: 'none', border: 'none', fontSize: '24px', color: '#a0aec0', cursor: 'pointer' }}>&times;</button>
+            </div>
+
+            {/* Content Body */}
+            <div style={{ padding: '24px' }}>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+                <div style={{ background: '#fcfcfd', padding: '16px', borderRadius: '12px', border: '1px solid #edf2f7' }}>
+                   <div style={{ fontSize: '12px', color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px', fontWeight: 'bold' }}>👤 Policy Holder</div>
+                   <div style={{ fontWeight: '600', color: '#2d3748', marginBottom: '4px' }}>{selectedPolicy.user_name}</div>
+                   <div style={{ fontSize: '13px', color: '#4a5568', marginBottom: '2px' }}>📧 {selectedPolicy.email}</div>
+                   <div style={{ fontSize: '13px', color: '#4a5568' }}>📞 {selectedPolicy.phone || 'Not provided'}</div>
+                </div>
+
+                <div style={{ background: '#fcfcfd', padding: '16px', borderRadius: '12px', border: '1px solid #edf2f7' }}>
+                   <div style={{ fontSize: '12px', color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px', fontWeight: 'bold' }}>🚗 Vehicle Info</div>
+                   <div style={{ fontWeight: '600', color: '#2d3748', marginBottom: '4px' }}>{selectedPolicy.vehicle} ({selectedPolicy.model_year})</div>
+                   <div style={{ fontSize: '13px', color: '#4a5568' }}>Reg No: <span style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{selectedPolicy.registration_no || 'N/A'}</span></div>
+                </div>
+              </div>
+
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px dashed #cbd5e0' }}>
+                   <div style={{ fontSize: '12px', color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px', fontWeight: 'bold' }}>📅 Policy Duration</div>
+                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#4a5568', marginBottom: '8px' }}>
+                      <span>Start Date:</span>
+                      <strong style={{ color: '#2d3748' }}>{selectedPolicy.start_date ? new Date(selectedPolicy.start_date).toLocaleDateString() : 'N/A'}</strong>
+                   </div>
+                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#4a5568' }}>
+                      <span>End Date:</span>
+                      <strong style={{ color: '#2d3748' }}>{selectedPolicy.end_date ? new Date(selectedPolicy.end_date).toLocaleDateString() : 'N/A'}</strong>
+                   </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

@@ -14,6 +14,9 @@ export default function AdminDashboard() {
   const [filter, setFilter] = useState("allclaims");
   const [search, setSearch] = useState("");
 
+  const [reviewData, setReviewData] = useState(null);
+  const [viewOnlyData, setViewOnlyData] = useState(null);
+
 
 
   // Read from localStorage
@@ -42,8 +45,19 @@ export default function AdminDashboard() {
 
 
   // Only managers can process claims
-  const handleProcessClaim = async (claimId, newStatus) => {
+  const handleProcessClaimClick = (claimId, newStatus) => {
     if (!isManager) return;
+    setReviewData({ claimId, newStatus, reason: "" });
+  };
+
+  const handleConfirmProcess = async () => {
+    if (!isManager || !reviewData) return;
+    const { claimId, newStatus, reason } = reviewData;
+    if (!reason.trim()) {
+      alert("Please provide a reason before confirming.");
+      return;
+    }
+    
     try {
       const res = await fetch(`http://localhost:5000/api/admin/claims/${claimId}/process`, {
         method: "POST",
@@ -51,10 +65,12 @@ export default function AdminDashboard() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${staffToken}`
         },
-        body: JSON.stringify({ new_status: newStatus })
+        body: JSON.stringify({ new_status: newStatus, admin_remarks: reason })
       });
-      if (res.ok) fetchClaims();
-      else alert("Action failed!");
+      if (res.ok) {
+        setReviewData(null);
+        fetchClaims();
+      } else alert("Action failed!");
     } catch (err) { alert("Error processing claim."); }
   };
 
@@ -139,10 +155,16 @@ export default function AdminDashboard() {
                         </td>
                         {isManager && (
                           <td className="admin-actions">
-                            <button className="btn-approve" disabled={c.status === "Approved"}
-                              onClick={() => handleProcessClaim(c.id, "Approved")}>Approve</button>
-                            <button className="btn-reject" disabled={c.status === "Rejected"}
-                              onClick={() => handleProcessClaim(c.id, "Rejected")}>Reject</button>
+                            {c.status === "Pending" ? (
+                              <>
+                                <button className="btn-approve" onClick={() => handleProcessClaimClick(c.id, "Approved")}>Approve</button>
+                                <button className="btn-reject" onClick={() => handleProcessClaimClick(c.id, "Rejected")}>Reject</button>
+                              </>
+                            ) : (
+                              <button style={{ background: 'none', border: '1px solid #e2e8f0', padding: '6px 12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: '600', color: '#4a5568' }} onClick={() => setViewOnlyData(c)}>
+                                View Details
+                              </button>
+                            )}
                           </td>
                         )}
                       </tr>
@@ -151,6 +173,53 @@ export default function AdminDashboard() {
                 </table>
               )}
             </div>
+
+            {/* Review Reason Modal */}
+            {reviewData && (
+              <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+                <div style={{ background: 'white', padding: '24px', borderRadius: '12px', width: '400px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                  <h3 style={{ margin: '0 0 16px 0', color: '#1a202c' }}>Confirm {reviewData.newStatus}</h3>
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '8px' }}>Reason / Remarks (Required)</label>
+                    <textarea 
+                      value={reviewData.reason} 
+                      onChange={e => setReviewData({...reviewData, reason: e.target.value})}
+                      placeholder="Explain your decision..."
+                      style={{ width: '100%', minHeight: '100px', padding: '12px', boxSizing: 'border-box', border: '1px solid #cbd5e0', borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                    <button onClick={() => setReviewData(null)} style={{ padding: '8px 16px', background: 'white', border: '1px solid #cbd5e0', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
+                    <button onClick={handleConfirmProcess} style={{ padding: '8px 16px', background: reviewData.newStatus === 'Approved' ? '#f97316' : '#e53e3e', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>
+                      Confirm {reviewData.newStatus}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* View Details Modal for Processed Claims */}
+            {viewOnlyData && (
+              <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setViewOnlyData(null)}>
+                <div style={{ background: 'white', padding: '24px', borderRadius: '12px', width: '400px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }} onClick={e => e.stopPropagation()}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0, color: '#1a202c' }}>Claim Details</h3>
+                    <button onClick={() => setViewOnlyData(null)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#a0aec0' }}>&times;</button>
+                  </div>
+                  <div style={{ marginBottom: '16px' }}>
+                    <p style={{ margin: '0 0 8px 0', fontSize: '14px' }}><strong>Claim No:</strong> {viewOnlyData.claim_number}</p>
+                    <p style={{ margin: '0 0 8px 0', fontSize: '14px' }}><strong>Status:</strong> <span className={`status-pill ${viewOnlyData.status?.toLowerCase()}`}>{viewOnlyData.status}</span></p>
+                  </div>
+                  <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #edf2f7' }}>
+                    <label style={{ display: 'block', fontSize: '12px', textTransform: 'uppercase', fontWeight: 'bold', color: '#a0aec0', marginBottom: '8px' }}>Admin Remarks</label>
+                    <p style={{ margin: 0, fontSize: '14px', color: '#2d3748', lineHeight: '1.5' }}>
+                      {viewOnlyData.admin_remarks || 'No remarks provided.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
         );
 

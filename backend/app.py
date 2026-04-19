@@ -814,51 +814,48 @@ def update_staff_role():
 @app.route('/api/user/stats', methods=['GET'])
 @token_required
 def get_user_stats():
-    """Get global statistics for the entire company dashboard"""
+    """Get personalized statistics for the logged-in user"""
     try:
         user = get_current_user()
         
-        # 1. Global Totals
-        total_claims = Claim.query.count()
-        total_cost = db.session.query(func.sum(DamageReport.total_estimated_cost)).scalar() or 0
+        # 1. User Totals
+        user_claims_count = Claim.query.filter_by(user_id=user.id).count()
+        total_user_cost = db.session.query(func.sum(DamageReport.total_estimated_cost)).filter_by(user_id=user.id).scalar() or 0
         
-        # 2. Status Distribution
+        # 2. Status Distribution (User)
         status_dist = {
-            'Pending': Claim.query.filter_by(status='Pending').count(),
-            'Approved': Claim.query.filter_by(status='Approved').count(),
-            'Rejected': Claim.query.filter_by(status='Rejected').count()
+            'Pending': Claim.query.filter_by(user_id=user.id, status='Pending').count(),
+            'Approved': Claim.query.filter_by(user_id=user.id, status='Approved').count(),
+            'Rejected': Claim.query.filter_by(user_id=user.id, status='Rejected').count()
         }
         
-        # 3. Top Car Models
+        # 3. Top Car Models (User)
         top_models_query = db.session.query(
             DamageReport.car_model, func.count(DamageReport.id)
-        ).group_by(DamageReport.car_model).order_by(func.count(DamageReport.id).desc()).limit(5).all()
+        ).filter_by(user_id=user.id).group_by(DamageReport.car_model).order_by(func.count(DamageReport.id).desc()).limit(5).all()
         top_models = [{'model': m[0], 'count': m[1]} for m in top_models_query]
         
-        # 4. Severity Distribution
+        # 4. Severity Distribution (User)
         from models import DamageReportPart
         sev_dist = {
-            'Minor': DamageReportPart.query.filter_by(severity='Minor').count(),
-            'Moderate': DamageReportPart.query.filter_by(severity='Moderate').count(),
-            'Severe': DamageReportPart.query.filter_by(severity='Severe').count()
+            'Minor': db.session.query(DamageReportPart).join(DamageReport).filter(DamageReport.user_id == user.id, DamageReportPart.severity == 'Minor').count(),
+            'Moderate': db.session.query(DamageReportPart).join(DamageReport).filter(DamageReport.user_id == user.id, DamageReportPart.severity == 'Moderate').count(),
+            'Severe': db.session.query(DamageReportPart).join(DamageReport).filter(DamageReport.user_id == user.id, DamageReportPart.severity == 'Severe').count()
         }
         
-        # 5. Top Damaged Part
+        # 5. Top Damaged Part (User)
         top_part_query = db.session.query(
             DamageReportPart.part_name, func.count(DamageReportPart.id)
-        ).group_by(DamageReportPart.part_name).order_by(func.count(DamageReportPart.id).desc()).first()
+        ).join(DamageReport).filter(DamageReport.user_id == user.id).group_by(DamageReportPart.part_name).order_by(func.count(DamageReportPart.id).desc()).first()
         top_part = top_part_query[0] if top_part_query else "None"
-
-        # 6. User Personal Stats (Sub-set)
-        user_claims = Claim.query.filter_by(user_id=user.id).count()
         
         return jsonify({
-            'total_repair_cost': total_cost,
+            'total_repair_cost': total_user_cost,
             'most_frequent_part': top_part,
-            'claim_count': user_claims,
-            'global_stats': {
-                'total_claims': total_claims,
-                'total_cost': total_cost,
+            'claim_count': user_claims_count,
+            'personal_stats': {
+                'total_claims': user_claims_count,
+                'total_cost': total_user_cost,
                 'top_part': top_part,
                 'status_distribution': status_dist,
                 'severity_distribution': sev_dist,
@@ -948,6 +945,8 @@ def admin_process_claim(claim_id):
         
     data = request.get_json()
     new_status = data.get('new_status')
+    admin_remarks = data.get('admin_remarks')
+    
     if new_status not in ['Approved', 'Rejected']:
         return jsonify({'error': 'Invalid status'}), 400
         
@@ -957,6 +956,8 @@ def admin_process_claim(claim_id):
         
     old_status = claim.status
     claim.status = new_status
+    if admin_remarks:
+        claim.admin_remarks = admin_remarks
     db.session.commit()
     
     # Notify user
@@ -984,9 +985,13 @@ def admin_get_all_reports():
 @app.route('/api/reports', methods=['GET'])
 @token_required
 def get_user_reports():
-    """Get all AI assessment reports (Global Insights Mode)"""
-    reports = DamageReport.query.order_by(DamageReport.created_at.desc()).all()
-    return jsonify([r.to_dict() for r in reports]), 200
+    """Get all AI assessment reports for the current user"""
+    try:
+        user = get_current_user()
+        reports = DamageReport.query.filter_by(user_id=user.id).order_by(DamageReport.created_at.desc()).all()
+        return jsonify([r.to_dict() for r in reports]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/admin/policies', methods=['GET'])
