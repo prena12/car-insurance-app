@@ -23,18 +23,8 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
     claimDetails: {
       claimType: '',
       incidentDateTime: '',
-      incidentLocation: '',
-      currentVehicleLocation: '',
-      circumstances: ''
-    },
-    documentsAndContact: {
       fullName: user ? `${user.first_name} ${user.last_name || ''}`.trim() : '',
       emailAddress: user?.email || '',
-      uploads: {
-        registrationBook: null,
-        drivingLicense: null,
-        cnicCopy: null
-      }
     }
   });
 
@@ -48,19 +38,6 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
     }));
   };
 
-  const handleFileUpload = (field, file) => {
-    setFormData(prev => ({
-      ...prev,
-      documentsAndContact: {
-        ...prev.documentsAndContact,
-        uploads: {
-          ...prev.documentsAndContact.uploads,
-          [field]: file
-        }
-      }
-    }));
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitError('');
@@ -68,7 +45,7 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
 
     try {
       const token = localStorage.getItem('access_token');
-      const submitEmail = formData.documentsAndContact.emailAddress?.trim();
+      const submitEmail = formData.claimDetails.emailAddress?.trim();
 
       if (!token && !submitEmail) {
         setSubmitError('Please login or provide an email to submit a claim.');
@@ -76,9 +53,8 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
         return;
       }
 
-      // Preparation for backend API (mapping new fields to existing schema)
+      // Mapping to existing backend schema (Backend logic preserved)
       const claimData = {
-        // Vehicle Details
         policy_no: formData.vehicleDetails.policyNo || null,
         policy_start_date: formData.vehicleDetails.policyStartDate || null,
         policy_end_date: formData.vehicleDetails.policyEndDate || null,
@@ -90,15 +66,15 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
         engine: formData.vehicleDetails.engineNo || null,
         vehicle_type: formData.vehicleDetails.vehicleType || null,
         
-        // Claim Details
         claim_type: formData.claimDetails.claimType || null,
         date_time: formData.claimDetails.incidentDateTime || null,
-        incident_place: formData.claimDetails.incidentLocation || null,
-        current_location: formData.claimDetails.currentVehicleLocation || null,
-        circumstances: formData.claimDetails.circumstances || null,
+        name: formData.claimDetails.fullName || null,
+        email: formData.claimDetails.emailAddress || (user && user.email) || null,
         
-        // Documents & Contact
-        email: formData.documentsAndContact.emailAddress || (user && user.email) || null
+        // Removed fields sent as null to avoid breaking backend expectations
+        incident_place: null,
+        current_location: null,
+        circumstances: null
       };
 
       const headers = { 'Content-Type': 'application/json' };
@@ -275,9 +251,10 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
         return (
           <div className="claim-form">
             <h2>Claim Details</h2>
-            <p className="step-subtext">Tell us about the incident</p>
+            <p className="step-subtext">Tell us about the incident and provide contact info</p>
             
             <div className="form-grid">
+              <div className="section-divider">INCIDENT INFORMATION</div>
               <div className="form-group">
                 <label>CLAIM TYPE <span>*</span></label>
                 <select
@@ -301,87 +278,27 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
                   required
                 />
               </div>
-              <div className="form-group">
-                <label>INCIDENT LOCATION <span>*</span></label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. M-9 Motorway, Karachi"
-                  value={formData.claimDetails.incidentLocation}
-                  onChange={(e) => handleInputChange('claimDetails', 'incidentLocation', e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>CURRENT VEHICLE LOCATION</label>
-                <input 
-                  type="text" 
-                  placeholder="Where is vehicle now?"
-                  value={formData.claimDetails.currentVehicleLocation}
-                  onChange={(e) => handleInputChange('claimDetails', 'currentVehicleLocation', e.target.value)}
-                />
-              </div>
-              <div className="form-group full-width">
-                <label>CIRCUMSTANCES OF CLAIM / LOSS <span>*</span></label>
-                <textarea 
-                  placeholder="Describe what happened in detail — how the damage occurred, conditions at the time, etc."
-                  value={formData.claimDetails.circumstances}
-                  onChange={(e) => handleInputChange('claimDetails', 'circumstances', e.target.value)}
-                  required
-                ></textarea>
-              </div>
-            </div>
-          </div>
-        );
-      
-      case 3:
-        return (
-          <div className="documents">
-            <h2>Documents & Contact</h2>
-            <p className="step-subtext">Upload required documents and verify your contact info</p>
-            
-            <div className="form-grid">
+
               <div className="section-divider">CONTACT INFORMATION</div>
-              
               <div className="form-group">
                 <label>FULL NAME <span>*</span></label>
                 <input 
                   type="text" 
                   placeholder="As on CNIC"
-                  value={formData.documentsAndContact.fullName}
-                  onChange={(e) => handleInputChange('documentsAndContact', 'fullName', e.target.value)}
+                  value={formData.claimDetails.fullName}
+                  onChange={(e) => handleInputChange('claimDetails', 'fullName', e.target.value)}
                   required
                 />
               </div>
-
               <div className="form-group">
                 <label>EMAIL ADDRESS</label>
                 <input 
                   type="email" 
                   placeholder="your@email.com"
-                  value={formData.documentsAndContact.emailAddress}
-                  onChange={(e) => handleInputChange('documentsAndContact', 'emailAddress', e.target.value)}
+                  value={formData.claimDetails.emailAddress}
+                  onChange={(e) => handleInputChange('claimDetails', 'emailAddress', e.target.value)}
                 />
               </div>
-
-              <div className="section-divider">REQUIRED DOCUMENTS</div>
-
-              <div className="upload-box">
-                <label>REGISTRATION BOOK COPY <span>*</span></label>
-                <input type="file" accept="image/*,.pdf" onChange={(e) => handleFileUpload('registrationBook', e.target.files[0])} required />
-                <p className="upload-info">PDF or image, max 5MB</p>
-              </div>
-              <div className="upload-box">
-                <label>DRIVING LICENSE <span>*</span></label>
-                <input type="file" accept="image/*,.pdf" onChange={(e) => handleFileUpload('drivingLicense', e.target.files[0])} required />
-                <p className="upload-info">PDF or image, max 5MB</p>
-              </div>
-              <div className="upload-box">
-                <label>CNIC COPY <span>*</span></label>
-                <input type="file" accept="image/*,.pdf" onChange={(e) => handleFileUpload('cnicCopy', e.target.files[0])} required />
-                <p className="upload-info">Front side, PDF or image</p>
-              </div>
-
-
             </div>
           </div>
         );
@@ -409,10 +326,6 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
           <div className={`step ${step >= 2 ? 'active' : ''}`}>
             <span>2</span>
             <p>Claim Details</p>
-          </div>
-          <div className={`step ${step >= 3 ? 'active' : ''}`}>
-            <span>3</span>
-            <p>Documents</p>
           </div>
         </div>
 
@@ -446,13 +359,13 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
               <div /> // Spacer
             )}
             
-            {step < 3 ? (
+            {step < 2 ? (
               <button 
                 type="button" 
                 className="next-btn" 
                 onClick={() => setStep(step + 1)}
               >
-                {step === 1 ? 'Next — Claim Details →' : 'Next — Documents →'}
+                Next — Claim Details →
               </button>
             ) : (
               <button 
@@ -460,7 +373,7 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
                 className="submit-btn"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? 'Submitting...' : 'Submit'}
+                {isSubmitting ? 'Submitting...' : 'Submit Claim'}
               </button>
             )}
           </div>
@@ -470,4 +383,4 @@ const NewClaimForm = ({ onClose = () => {}, onSuccess = () => {} }) => {
   );
 };
 
-export default NewClaimForm;
+export default NewClaimForm;

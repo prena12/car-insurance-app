@@ -9,11 +9,17 @@ const AIReport = ({ selectedClaim = null, viewOnly = false, onNavigateToHistory 
   const [assessmentReport, setAssessmentReport] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [viewMode, setViewMode] = useState(false);
+  const [error, setError] = useState(null);
 
   // Check if claim has existing report when component mounts
   React.useEffect(() => {
-    if (selectedClaim) {
-      const fetchClaimReport = async () => {
+    // CRITICAL: Always clear previous report data when switching claims or entering a new view
+    setAssessmentReport(null);
+    setCarModel("");
+    setError(null);
+    
+    const fetchExistingReport = async () => {
+      if (selectedClaim) {
         try {
         let token = localStorage.getItem('access_token');
         
@@ -56,31 +62,40 @@ const AIReport = ({ selectedClaim = null, viewOnly = false, onNavigateToHistory 
             const sId = selectedClaim.id;
             const sNum = selectedClaim.claim_number || selectedClaim.claimNumber;
             
-            const existingReport = savedReports.find(report => {
+            const filteredReports = savedReports.filter(report => {
               const rId = report.claim_id;
               const rNum = report.claim_number;
               
               if (sId && rId && sId === rId) return true;
-              if (sNum && rNum && sNum === rNum) return true;
+              const isValidNumber = (num) => num && num !== "N/A" && num !== "NULL";
+              if (isValidNumber(sNum) && isValidNumber(rNum) && sNum === rNum) return true;
               return false;
             });
-            
-            if (existingReport) {
-              setAssessmentReport(existingReport);
+
+            // Always take the LATEST report (highest ID or latest created_at)
+            if (filteredReports.length > 0) {
+              const latestByDate = [...filteredReports].sort((a, b) => 
+                new Date(b.created_at || 0) - new Date(a.created_at || 0)
+              );
+              const latestReport = latestByDate[0];
+              setAssessmentReport(latestReport);
               setViewMode(true);
-              setActiveStep(3);
-            } else if (viewOnly) {
-              setViewMode(true);
+              setIsLoading(false);
+            } else {
               setAssessmentReport(null);
+              setViewMode(false);
+              setIsLoading(false);
             }
           }
         } catch (err) {
           console.error("Error loading claim report:", err);
         }
-      };
-      
-      fetchClaimReport();
-    }
+      } else {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchExistingReport();
   }, [selectedClaim, viewOnly]);
 
   const carModelsList = [
@@ -280,7 +295,9 @@ const AIReport = ({ selectedClaim = null, viewOnly = false, onNavigateToHistory 
   );
 
   const ReportStep = () => {
-    const generatedDate = new Date().toLocaleDateString('en-US', {
+    // Use the report's actual date if it's an existing report, otherwise use today
+    const reportDateStr = assessmentReport?.created_at || assessmentReport?.date || new Date().toISOString();
+    const generatedDate = new Date(reportDateStr).toLocaleDateString('en-US', {
       year: 'numeric', month: 'long', day: 'numeric'
     });
     return (
@@ -293,7 +310,7 @@ const AIReport = ({ selectedClaim = null, viewOnly = false, onNavigateToHistory 
               <h3 style={{ marginBottom: '12px' }}>Submitted Claim Summary</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
                 <div><strong>Claim No:</strong> {selectedClaim.claim_number || selectedClaim.claimNumber || 'N/A'}</div>
-                <div><strong>Name:</strong> {selectedClaim.name || selectedClaim.email || 'Unknown'}</div>
+                <div><strong>Name:</strong> {assessmentReport?.customer_name || selectedClaim?.name || selectedClaim?.email || 'Unknown'}</div>
                 <div><strong>Policy No:</strong> {selectedClaim.policy_no || 'N/A'}</div>
                 <div><strong>Date:</strong> {selectedClaim.created_at ? new Date(selectedClaim.created_at).toLocaleDateString() : 'N/A'}</div>
               </div>
@@ -371,7 +388,13 @@ const AIReport = ({ selectedClaim = null, viewOnly = false, onNavigateToHistory 
               <input type="checkbox" /> Mark for manual inspection / Send to Claims Manager
             </label>
             <div className="report-links">
-              <button className="link-button" onClick={() => setActiveStep(1)}>Re-upload image</button>
+              <button className="link-button" onClick={() => {
+                setAssessmentReport(null);
+                setCarModel("");
+                setSelectedFile(null);
+                setViewMode(false);
+                setActiveStep(1);
+              }}>Re-upload image</button>
               <button className="link-button" onClick={onNavigateToHistory}>View History</button>
             </div>
           </div>
@@ -487,7 +510,7 @@ const AIReport = ({ selectedClaim = null, viewOnly = false, onNavigateToHistory 
         )}
       </div>
 
-      {!viewMode && (
+      {(!viewMode || (viewMode && activeStep < 3)) && (
         <div className="step-actions">
           {activeStep > 1 && (
             <button 

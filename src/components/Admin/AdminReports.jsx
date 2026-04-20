@@ -171,7 +171,7 @@ const AdminReports = () => {
               <div className="report-card-header">
                 <div>
                   <p className="report-card-title">Vehicle Damage Report</p>
-                  <p className="report-card-date">Generated on {new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'})}</p>
+                  <p className="report-card-date">Generated on {new Date(downloadingReport.created_at || new Date()).toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'})}</p>
                 </div>
               </div>
 
